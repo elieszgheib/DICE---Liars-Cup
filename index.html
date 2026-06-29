@@ -1,0 +1,3269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dice</title>
+
+<!-- Fonts: Bricolage Grotesque (display, friendly card-face), Inter (UI), Space Mono (room code / data) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  /* =====================================================================
+     DICE — "Backroom" visual system
+     A warm, low-lit card-room table. Calm by default, warm when it matters.
+     ===================================================================== */
+  :root{
+    /* --- core palette --- */
+    --night:      #11261F;   /* page background, near-black green */
+    --baize:      #1F4A3D;   /* table felt */
+    --baize-deep: #163A30;   /* darker felt / panels */
+    --baize-line: #2C6151;   /* hairline borders on felt */
+    --cream:      #F3EAD6;   /* warm ivory: dice faces, primary text */
+    --cream-dim:  #A9B8AC;   /* muted sage-grey text */
+    --brass:      #E0A84E;   /* warm accent: CTAs, highlights */
+    --brass-deep: #B07E2E;   /* brass shadow */
+    --clay:       #D9695A;   /* muted terracotta-rose: danger/challenge */
+    --clay-deep:  #A84A3E;
+    --sage:       #7FB59B;   /* soft success / "true" */
+    --sage-deep:  #4F8A72;
+    --ink:        #1A1410;   /* warm near-black, text on cream/brass */
+
+    /* --- per-rank card face colors --- */
+    --card-red:   #C8453B;   /* 9, K */
+    --card-black: #23201C;   /* 10, A */
+    --card-green: #2E8B57;   /* J */
+    --card-blue:  #3A6EA5;   /* Q */
+
+    /* --- aliases so legacy inline style="var(--x)" still resolve --- */
+    --felt-black:   var(--night);
+    --felt-green:   var(--baize-deep);
+    --felt-green-2: var(--baize-line);
+    --gold:         var(--brass);
+    --gold-dim:     var(--brass-deep);
+    --red:          var(--clay);
+    --red-dim:      var(--clay-deep);
+    --jade:         var(--sage);
+    --jade-dim:     var(--sage-deep);
+
+    --display: 'Bricolage Grotesque', sans-serif;
+    --ui:      'Inter', sans-serif;
+    --mono:    'Space Mono', monospace;
+
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow-deep: 0 14px 36px rgba(0,0,0,0.42);
+    --shadow-chip: 0 4px 10px rgba(0,0,0,0.35);
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; height:100%; background:var(--night); }
+
+  body{
+    font-family:var(--ui);
+    color:var(--cream);
+    min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    /* warm pooled light over felt */
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -8%, rgba(224,168,78,0.16), transparent 62%),
+      radial-gradient(ellipse 120% 70% at 50% 40%, rgba(31,74,61,0.55), transparent 75%),
+      var(--night);
+    background-attachment: fixed;
+    overflow-x:hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  .screen{
+    width:100%; max-width:460px; min-height:100vh;
+    display:flex; flex-direction:column;
+    padding:26px 20px 34px; position:relative;
+  }
+  .hidden{ display:none !important; }
+
+  /* ---------- Typography ---------- */
+  h1,h2,h3{ font-family:var(--display); font-weight:700; margin:0; letter-spacing:-0.02em; }
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--brass); margin:0 0 6px;
+  }
+  p{ margin:0; line-height:1.5; }
+  .muted{ color:var(--cream-dim); }
+
+  /* ---------- Buttons ---------- */
+  button{
+    font-family:var(--ui); font-weight:600; font-size:15px;
+    border:none; border-radius:var(--radius-sm); cursor:pointer;
+    -webkit-appearance:none; appearance:none;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible{
+    outline:3px solid var(--brass); outline-offset:2px;
+  }
+  .btn-primary{
+    background:linear-gradient(180deg, #EAB665, var(--brass));
+    color:var(--ink);
+    padding:16px 20px; width:100%; font-weight:700; font-size:16px;
+    box-shadow:0 4px 0 var(--brass-deep), var(--shadow-chip);
+    transition:transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .btn-primary:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--brass-deep); }
+  .btn-primary:disabled{ opacity:0.45; box-shadow:none; cursor:not-allowed; filter:saturate(0.6); }
+
+  .btn-secondary{
+    background:rgba(243,234,214,0.04); color:var(--cream);
+    border:1.5px solid var(--baize-line);
+    padding:14px 20px; width:100%; font-weight:600;
+  }
+  .btn-secondary:active{ background:rgba(224,168,78,0.12); border-color:var(--brass); }
+
+  .btn-danger{
+    background:linear-gradient(180deg, #E2776A, var(--clay));
+    color:#fff;
+    padding:16px 20px; width:100%; font-weight:700; font-size:16px;
+    box-shadow:0 4px 0 var(--clay-deep), var(--shadow-chip);
+    transition:transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .btn-danger:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--clay-deep); }
+
+  .btn-row{ display:flex; gap:10px; }
+  .btn-row > *{ flex:1; }
+
+  input[type=text]{
+    font-family:var(--mono); font-size:20px; font-weight:700; letter-spacing:0.14em;
+    text-transform:uppercase; text-align:center;
+    background:var(--baize-deep); border:1.5px solid var(--baize-line);
+    color:var(--cream); border-radius:var(--radius-sm); padding:15px; width:100%;
+  }
+  input[type=text]::placeholder{ color:var(--cream-dim); letter-spacing:0.1em; opacity:0.7; }
+  input.name-input{
+    font-family:var(--ui); font-size:16px; font-weight:600; letter-spacing:0;
+    text-transform:none; text-align:left;
+  }
+
+  /* ---------- Landing ---------- */
+  .landing{ justify-content:center; align-items:center; text-align:center; flex:1; gap:0; }
+  .landing .logo-row{ display:flex; align-items:flex-end; gap:10px; margin-bottom:18px; }
+  .die-mark{
+    width:52px; height:70px; border-radius:10px;
+    background:linear-gradient(165deg, #FBF4E4, #E4D7BC);
+    color:var(--ink); display:flex; align-items:center; justify-content:center;
+    font-family:var(--display); font-weight:800; font-size:28px;
+    box-shadow:var(--shadow-deep), inset 0 0 0 1.5px rgba(224,168,78,0.35);
+    transform:rotate(-7deg);
+  }
+  .landing h1{ font-size:52px; letter-spacing:-0.04em; }
+  .landing .tagline{ margin-top:10px; margin-bottom:44px; max-width:300px; }
+  .landing .stack{ width:100%; display:flex; flex-direction:column; gap:12px; }
+
+  /* ---------- Setup / lobby shared ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:26px; }
+  .topbar .back{ color:var(--cream-dim); font-family:var(--mono); font-size:13px; background:none; padding:6px; }
+
+  .card{
+    background:var(--baize-deep); border-radius:var(--radius); padding:20px;
+    border:1px solid var(--baize-line);
+    box-shadow: inset 0 1px 0 rgba(243,234,214,0.04);
+  }
+
+  .field{ margin-bottom:20px; }
+  .field label{ display:block; font-family:var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--brass); margin-bottom:9px; }
+
+  .mode-toggle{ display:flex; gap:8px; }
+  .mode-opt{
+    flex:1; padding:14px 10px; border-radius:var(--radius-sm); text-align:center;
+    border:1.5px solid var(--baize-line); background:rgba(243,234,214,0.03); color:var(--cream-dim);
+    font-size:14px; font-weight:600; cursor:pointer; transition:all 0.12s ease;
+  }
+  .mode-opt.active{ border-color:var(--brass); color:var(--ink); background:var(--brass); }
+
+  .room-code-display{
+    font-family:var(--mono); font-size:46px; font-weight:700; letter-spacing:0.2em;
+    color:var(--brass); text-align:center; padding:14px 0 6px;
+    text-shadow:0 2px 12px rgba(224,168,78,0.25);
+  }
+
+  .player-roster{ display:flex; flex-direction:column; gap:8px; margin:18px 0; }
+  .roster-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 15px; background:var(--baize-deep); border-radius:var(--radius-sm);
+    border:1px solid var(--baize-line);
+  }
+  .roster-row .nm{ font-weight:600; }
+  .roster-row .tag{ font-family:var(--mono); font-size:11px; color:var(--brass); }
+
+  .empty-state{
+    text-align:center; padding:30px 10px; color:var(--cream-dim);
+    font-size:14px; border:1.5px dashed var(--baize-line); border-radius:var(--radius-sm);
+  }
+
+  /* ---------- Funny question ---------- */
+  .fq-wrap{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:24px; text-align:center; }
+  .fq-question{ font-family:var(--display); font-weight:700; font-size:28px; line-height:1.25; letter-spacing:-0.02em; }
+  .fq-options{ display:flex; flex-direction:column; gap:10px; }
+  .fq-opt{
+    padding:15px; border-radius:var(--radius-sm); border:1.5px solid var(--baize-line);
+    background:var(--baize-deep); color:var(--cream); font-size:15px; font-weight:600;
+  }
+  .fq-opt:active{ background:rgba(224,168,78,0.15); border-color:var(--brass); }
+
+  /* ---------- Game table ---------- */
+  .table-screen{ padding-top:18px; gap:16px; }
+
+  .hud{
+    display:flex; align-items:center; justify-content:space-between;
+    font-family:var(--mono); font-size:12px; color:var(--cream-dim);
+  }
+  .hud .round-no{ color:var(--brass); }
+
+  .opponents{ display:flex; gap:8px; overflow-x:auto; padding:4px 2px 10px; scrollbar-width:none; }
+  .opponents::-webkit-scrollbar{ display:none; }
+  .opp-chip{
+    flex:0 0 auto; min-width:76px; padding:11px 9px; border-radius:var(--radius-sm);
+    background:var(--baize-deep); border:1.5px solid var(--baize-line);
+    text-align:center; position:relative; transition:border-color 0.15s ease;
+  }
+  .opp-chip.current-turn{ border-color:var(--brass); box-shadow:0 0 0 1px var(--brass) inset, 0 0 18px rgba(224,168,78,0.25); }
+  .opp-chip.eliminated{ opacity:0.32; }
+  .opp-chip .opp-name{ font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:76px; }
+  .opp-chip .opp-dice{ font-family:var(--mono); font-size:11px; color:var(--brass); margin-top:4px; }
+  .opp-chip .you-badge{
+    position:absolute; top:-7px; right:-2px; background:var(--brass); color:var(--ink);
+    font-size:9px; font-family:var(--mono); padding:2px 5px; border-radius:6px; font-weight:700;
+  }
+
+  .bid-ledger{
+    background:
+      radial-gradient(ellipse 70% 80% at 50% 40%, rgba(224,168,78,0.06), transparent 70%),
+      var(--baize);
+    border:1px solid var(--baize-line);
+    border-radius:var(--radius); padding:22px 20px;
+    display:flex; flex-direction:column;
+    box-shadow: inset 0 2px 18px rgba(0,0,0,0.30);
+  }
+  .bid-ledger-title{ font-family:var(--mono); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--cream-dim); margin-bottom:12px; }
+  .current-bid{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; padding:12px 0; }
+  .current-bid .by{ font-family:var(--mono); font-size:12px; color:var(--cream-dim); }
+  .current-bid .claim{ font-size:44px; font-family:var(--display); font-weight:800; color:var(--cream); letter-spacing:-0.02em; }
+  .current-bid .claim .face{ color:var(--brass); }
+  .current-bid.empty .claim{ color:var(--cream-dim); font-size:19px; font-weight:500; font-family:var(--ui); letter-spacing:0; }
+
+  .your-dice{ display:flex; flex-direction:column; gap:10px; }
+  .your-dice-label{ font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--cream-dim); display:flex; justify-content:space-between; align-items:center; }
+  .dice-row{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+
+  /* dice as warm ivory chips with a playing-card face */
+  .die{
+    width:54px; height:72px; border-radius:11px;
+    position:relative; perspective:600px;
+  }
+  .die-inner{
+    width:100%; height:100%; border-radius:11px;
+    position:relative;
+    background:linear-gradient(165deg, #FBF4E4, #E4D7BC);
+    box-shadow:var(--shadow-chip), inset 0 0 0 1.5px rgba(224,168,78,0.30), inset 0 -3px 6px rgba(176,126,46,0.18);
+    transition:transform 0.5s cubic-bezier(.2,.8,.2,1);
+    transform-style:preserve-3d;
+    color:var(--ink);
+  }
+  /* center figure + mirrored corner indices, like a real card */
+  .die-inner .pip{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:var(--display); font-weight:800; font-size:27px; letter-spacing:-0.02em;
+  }
+  .die-inner .corner{
+    position:absolute; font-family:var(--display); font-weight:800; font-size:13px; line-height:1; letter-spacing:-0.02em;
+  }
+  .die-inner .corner.tl{ top:6px; left:7px; }
+  .die-inner .corner.br{ bottom:6px; right:7px; transform:rotate(180deg); }
+
+  /* per-rank colors: 9 red, 10 black, J green, Q blue, K red, A black */
+  .die.r9  .die-inner{ color:var(--card-red); }
+  .die.r10 .die-inner{ color:var(--card-black); }
+  .die.rJ  .die-inner{ color:var(--card-green); }
+  .die.rQ  .die-inner{ color:var(--card-blue); }
+  .die.rK  .die-inner{ color:var(--card-red); }
+  .die.rA  .die-inner{ color:var(--card-black); }
+
+  .die.covered .die-inner{
+    background:linear-gradient(165deg, #245A4A, var(--baize-deep));
+    color:transparent;
+    box-shadow:var(--shadow-chip), inset 0 0 0 1.5px var(--baize-line);
+  }
+  .die.covered .die-inner .pip,
+  .die.covered .die-inner .corner{ visibility:hidden; }
+  .die.covered .die-inner::after{
+    content:'?'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:rgba(224,168,78,0.55); font-family:var(--display); font-weight:700; font-size:24px;
+  }
+
+  /* cup-shake + tip animation */
+  @keyframes cup-shake{
+    0%,100%{ transform:translateY(0) rotate(0); }
+    15%{ transform:translateY(-3px) rotate(-7deg); }
+    30%{ transform:translateY(0) rotate(6deg); }
+    45%{ transform:translateY(-2px) rotate(-5deg); }
+    60%{ transform:translateY(0) rotate(4deg); }
+    75%{ transform:translateY(-1px) rotate(-2deg); }
+  }
+  .die.rolling .die-inner{ animation:cup-shake 0.6s ease-in-out; }
+
+  .cup-toggle{
+    background:rgba(243,234,214,0.04); border:1.5px solid var(--baize-line); color:var(--cream-dim);
+    font-family:var(--mono); font-size:11px; padding:7px 11px; border-radius:8px;
+  }
+  .cup-toggle.revealed{ border-color:var(--brass); color:var(--brass); }
+
+  .action-zone{ display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+
+  .bid-picker{
+    background:var(--baize-deep); border:1px solid var(--baize-line);
+    border-radius:var(--radius); padding:16px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .picker-row{ display:flex; flex-direction:column; gap:8px; }
+  .picker-row label{ font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--brass); }
+  .stepper{ display:flex; align-items:center; gap:12px; }
+  .stepper button{
+    width:44px; height:44px; border-radius:var(--radius-sm); background:var(--baize); color:var(--cream);
+    font-size:22px; display:flex; align-items:center; justify-content:center; font-weight:700;
+    border:1px solid var(--baize-line);
+  }
+  .stepper button:disabled{ opacity:0.3; }
+  .stepper .val{ flex:1; text-align:center; font-family:var(--display); font-size:26px; font-weight:800; }
+
+  .face-grid{ display:flex; gap:6px; }
+  .face-opt{
+    flex:1; padding:11px 4px; border-radius:9px; text-align:center;
+    background:var(--baize); color:var(--cream-dim); font-family:var(--display); font-weight:700; font-size:17px;
+    border:1.5px solid var(--baize-line);
+  }
+  .face-opt.active{ border-color:var(--brass); color:var(--ink); background:var(--brass); }
+  .face-opt:disabled{ opacity:0.25; }
+  /* per-rank tint on the face picker (only when not active/selected) */
+  .face-opt.face-r9:not(.active){  color:var(--card-red); }
+  .face-opt.face-r10:not(.active){ color:var(--cream); }
+  .face-opt.face-rJ:not(.active){  color:var(--card-green); }
+  .face-opt.face-rQ:not(.active){  color:#7FA8D9; }
+  .face-opt.face-rK:not(.active){  color:var(--card-red); }
+  .face-opt.face-rA:not(.active){  color:var(--cream); }
+
+  .waiting-banner{
+    text-align:center; padding:16px; color:var(--cream-dim); font-size:14px;
+    border:1.5px dashed var(--baize-line); border-radius:var(--radius-sm);
+  }
+  .waiting-banner b{ color:var(--brass); }
+
+  /* ---------- Reveal / resolution ---------- */
+  .reveal-overlay{
+    position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse at 50% 35%, rgba(31,74,61,0.96), rgba(17,38,31,0.99)),
+      var(--night);
+    z-index:50;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px; text-align:center; gap:18px;
+  }
+  .reveal-overlay .verdict{ font-family:var(--display); font-weight:800; font-size:34px; letter-spacing:-0.02em; }
+  .reveal-overlay .verdict.true{ color:var(--sage); }
+  .reveal-overlay .verdict.false{ color:var(--clay); }
+  .reveal-grid{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:420px; }
+  .reveal-grid .mini-die{
+    width:36px; height:46px; border-radius:8px; background:linear-gradient(165deg, #FBF4E4, #E4D7BC);
+    color:var(--ink); display:flex; align-items:center; justify-content:center;
+    font-family:var(--display); font-weight:800; font-size:17px;
+  }
+  .reveal-grid .mini-die.match{ box-shadow:0 0 0 2px var(--sage), 0 0 14px rgba(127,181,155,0.4); }
+  .reveal-grid .mini-die.r9, .reveal-grid .mini-die.rK{ color:var(--card-red); }
+  .reveal-grid .mini-die.r10,.reveal-grid .mini-die.rA{ color:var(--card-black); }
+  .reveal-grid .mini-die.rJ{ color:var(--card-green); }
+  .reveal-grid .mini-die.rQ{ color:var(--card-blue); }
+  .reveal-count{ font-family:var(--mono); font-size:14px; color:var(--cream-dim); }
+
+  .reveal-overlay{ overflow-y:auto; }
+  .reveal-counts{
+    width:100%; max-width:320px; display:flex; flex-direction:column; gap:6px; margin-top:4px;
+  }
+  .count-row{
+    display:flex; align-items:center; gap:10px; padding:9px 13px;
+    background:var(--baize-deep); border:1px solid var(--baize-line); border-radius:10px;
+  }
+  .count-row.out{ opacity:0.4; }
+  .count-row .count-name{ flex:1; font-weight:600; font-size:14px; text-align:left; }
+  .count-row .count-dice{ font-family:var(--mono); font-size:12px; color:var(--brass); }
+  .count-row .count-ready{ font-family:var(--mono); font-size:11px; color:var(--cream-dim); min-width:42px; text-align:right; }
+  .count-row .count-ready.is-ready{ color:var(--sage); }
+  .reveal-action{ width:100%; max-width:320px; margin-top:6px; }
+
+  /* ---------- Endgame ---------- */
+  .end-screen{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:18px; }
+  .end-screen h1{ font-size:40px; color:var(--brass); letter-spacing:-0.03em; }
+
+  /* ---------- avatars ---------- */
+  .avatar{
+    display:inline-flex; align-items:center; justify-content:center; border-radius:50%;
+    line-height:1; box-shadow:var(--shadow-chip); flex:0 0 auto;
+    background-size:cover; background-position:center;
+  }
+  .avatar.img{ font-size:0 !important; }
+  .avatar-picker{ display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:4px; }
+  .avatar-opt{
+    aspect-ratio:1; border-radius:50%; border:2px solid transparent; background:none; padding:0;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .avatar-opt.active{ border-color:var(--brass); }
+  .avatar-photo-row{ display:flex; gap:8px; margin-top:10px; }
+  .avatar-photo-btn{
+    flex:1; padding:11px; border-radius:10px; font-size:13px; font-weight:600;
+    background:rgba(243,234,214,0.05); border:1.5px solid var(--baize-line); color:var(--cream);
+  }
+
+  /* ===================== ROUND FELT TABLE ===================== */
+  .felt-table{ width:100%; display:flex; justify-content:center; margin:6px 0 4px; }
+  .felt-surface{
+    position:relative; width:100%; max-width:420px; aspect-ratio: 1 / 0.92;
+    border-radius:50%;
+    background:
+      radial-gradient(ellipse 65% 60% at 50% 45%, #245A4A, var(--baize) 70%, var(--baize-deep) 100%);
+    border:6px solid #3a2a1c;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.45), 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .felt-center{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:54%; text-align:center; display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .felt-claim-label{ font-family:var(--mono); font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--cream-dim); }
+  .felt-center .current-bid{ padding:0; }
+  .felt-center .current-bid .by{ font-family:var(--mono); font-size:11px; color:var(--cream-dim); }
+  .felt-center .current-bid .claim{ font-size:32px; font-family:var(--display); font-weight:800; color:var(--cream); letter-spacing:-0.02em; }
+  .felt-center .current-bid .claim .face{ color:var(--brass); }
+  .felt-center .current-bid.empty .claim{ color:var(--cream-dim); font-size:15px; font-weight:500; font-family:var(--ui); letter-spacing:0; }
+
+  .seats{ position:absolute; inset:0; }
+  .seat{
+    position:absolute; transform:translate(-50%,-50%);
+    display:flex; flex-direction:column; align-items:center; gap:3px; width:64px;
+  }
+  .seat .seat-name{
+    font-size:11px; font-weight:600; max-width:64px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; color:var(--cream);
+  }
+  .seat.is-turn .seat-name{ color:var(--brass); }
+  .seat.is-out{ opacity:0.4; }
+  .seat .seat-you{ font-family:var(--mono); font-size:8px; color:var(--brass); }
+  .cup{
+    width:38px; height:34px; position:relative;
+    background:linear-gradient(165deg, #3a2c1d, #2a2014);
+    border-radius:6px 6px 14px 14px;
+    box-shadow:var(--shadow-chip), inset 0 2px 3px rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid #4a3826;
+  }
+  .seat.is-turn .cup{ box-shadow:0 0 0 2px var(--brass), 0 0 14px rgba(224,168,78,0.4); }
+  .cup .cup-count{ font-family:var(--mono); font-weight:700; font-size:14px; color:var(--brass); }
+  .cup.empty{ opacity:0.4; }
+  .cup.empty .cup-count{ color:var(--cream-dim); }
+  .seat .seat-stack{ font-family:var(--mono); font-size:8px; color:var(--sage); }
+  @keyframes cup-roll{
+    0%{ transform:translateY(0) rotate(0); }
+    15%{ transform:translateY(-4px) rotate(-12deg); }
+    30%{ transform:translateY(0) rotate(10deg); }
+    45%{ transform:translateY(-3px) rotate(-8deg); }
+    60%{ transform:translateY(0) rotate(7deg); }
+    75%{ transform:translateY(-1px) rotate(-3deg); }
+    100%{ transform:translateY(0) rotate(0); }
+  }
+  .cup.rolling{ animation:cup-roll 0.7s ease-in-out; }
+
+  /* ===================== GLOBAL STATUS BAR ===================== */
+  .status-bar{
+    position:fixed; top:0; left:0; right:0; height:34px; z-index:90;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 14px; background:rgba(11,30,23,0.82); backdrop-filter:blur(8px);
+    border-bottom:1px solid rgba(44,97,81,0.5);
+    font-family:var(--mono);
+  }
+  .status-left{ display:flex; align-items:center; gap:10px; }
+  .status-clock{ font-size:12px; color:var(--cream-dim); }
+  .status-battery{ font-size:11px; color:var(--cream-dim); display:flex; align-items:center; gap:3px; }
+  .status-battery.low #status-batt-icon, .status-battery.low #status-batt-pct{ color:var(--clay); }
+  .status-balance{
+    display:flex; align-items:center; gap:6px; padding:4px 12px; border-radius:999px;
+    background:var(--brass); color:var(--ink); border:none;
+    font-family:var(--mono); font-weight:700; font-size:14px;
+  }
+  .status-balance .sb-coin{ font-size:11px; }
+  .screen{ padding-top:48px; }
+  .reveal-overlay{ padding-top:48px; }
+  .landing-topbar{ display:none; }
+
+  /* ---------- toast / connection ---------- */
+  .conn-banner{
+    font-family:var(--mono); font-size:11px; text-align:center; padding:9px;
+    background:var(--clay-deep); color:var(--cream); border-radius:8px; margin-bottom:14px;
+  }
+
+  /* ---------- account / auth chrome ---------- */
+  .landing-topbar{ position:absolute; top:18px; left:20px; right:20px; display:flex; justify-content:space-between; align-items:center; }
+  .balance-pill{
+    display:flex; align-items:center; gap:7px; padding:7px 13px; border-radius:999px;
+    background:var(--baize-deep); border:1.5px solid var(--brass); color:var(--brass);
+    font-family:var(--mono); font-weight:700; font-size:14px;
+  }
+  .balance-pill .bal-coin{ color:var(--brass); font-size:13px; }
+  .account-btn{
+    padding:7px 14px; border-radius:999px; background:rgba(243,234,214,0.06);
+    border:1.5px solid var(--baize-line); color:var(--cream); font-size:13px; font-weight:600;
+  }
+  .btn-ghost{
+    background:transparent; color:var(--cream-dim); border:1px dashed var(--baize-line);
+    padding:12px 20px; width:100%; font-weight:600;
+  }
+  .landing-foot{ margin-top:22px; font-size:13px; text-align:center; max-width:300px; }
+  .link-btn{
+    background:none; border:none; color:var(--brass); font-weight:700; font-size:inherit;
+    cursor:pointer; padding:0; text-decoration:underline; font-family:inherit;
+  }
+  .auth-error{
+    color:var(--clay); font-size:13px; margin:0 0 14px; line-height:1.4;
+  }
+  .btn-google{
+    display:flex; align-items:center; justify-content:center; gap:10px; width:100%;
+    padding:14px 20px; border-radius:var(--radius-sm); font-weight:700; font-size:15px;
+    background:var(--cream); color:var(--ink); border:none; margin-bottom:6px;
+  }
+  .btn-google .g-mark{
+    font-family:var(--display); font-weight:800; color:#4285F4; font-size:18px;
+  }
+  .auth-divider{ display:flex; align-items:center; gap:12px; color:var(--cream-dim); font-size:12px; margin:14px 0 18px; font-family:var(--mono); }
+  .auth-divider::before, .auth-divider::after{ content:""; flex:1; height:1px; background:var(--baize-line); }
+  input[type=password]{
+    font-family:var(--ui); font-size:16px; letter-spacing:0; text-transform:none; text-align:left;
+    background:var(--baize-deep); border:1.5px solid var(--baize-line);
+    color:var(--cream); border-radius:var(--radius-sm); padding:15px; width:100%;
+  }
+
+  /* account screen */
+  .acct-balance{
+    text-align:center; padding:22px 0 10px;
+  }
+  .acct-balance .amt{ font-family:var(--mono); font-weight:700; font-size:46px; color:var(--brass); }
+  .acct-balance .lbl{ font-family:var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--cream-dim); }
+  .acct-handle{ text-align:center; font-family:var(--display); font-weight:700; font-size:20px; margin-bottom:4px; }
+  .acct-verify-warn{
+    background:rgba(217,105,90,0.12); border:1px solid var(--clay); border-radius:10px;
+    padding:12px 14px; font-size:13px; color:var(--cream); margin:14px 0;
+  }
+  .acct-tiles{ display:flex; flex-direction:column; gap:10px; margin-top:18px; }
+  .acct-tile{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:16px; border-radius:var(--radius-sm); background:var(--baize-deep);
+    border:1px solid var(--baize-line); color:var(--cream); width:100%; text-align:left;
+  }
+  .acct-tile .tile-main{ display:flex; flex-direction:column; gap:2px; }
+  .acct-tile .tile-title{ font-weight:700; font-size:15px; }
+  .acct-tile .tile-sub{ font-size:12px; color:var(--cream-dim); }
+  .acct-tile .tile-cta{ font-family:var(--mono); font-size:12px; color:var(--brass); white-space:nowrap; }
+  .acct-tile:disabled{ opacity:0.5; }
+  .acct-referral-code{
+    font-family:var(--mono); font-weight:700; color:var(--brass); font-size:15px;
+  }
+
+  /* wheel */
+  .wheel-stage{ position:relative; width:280px; height:280px; margin:0 auto; }
+  .wheel-pointer{ position:absolute; top:-6px; left:50%; transform:translateX(-50%); color:var(--brass); font-size:26px; z-index:3; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  .wheel{
+    width:280px; height:280px; border-radius:50%; position:relative;
+    border:8px solid var(--brass); box-shadow:var(--shadow-deep), inset 0 0 0 2px var(--baize-deep);
+    transition:transform 4.5s cubic-bezier(.15,.85,.2,1);
+    background:var(--baize-deep);
+  }
+  .wheel-seg-label{
+    position:absolute; left:50%; top:50%; transform-origin:0 0;
+    font-family:var(--mono); font-weight:700; font-size:14px; color:var(--cream);
+  }
+  .wheel-result{ text-align:center; font-family:var(--display); font-weight:800; font-size:24px; color:var(--brass); min-height:30px; margin-top:18px; }
+
+  /* money table additions */
+  .stake-banner{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    font-family:var(--mono); font-size:12px; color:var(--brass);
+    background:rgba(224,168,78,0.08); border:1px solid rgba(224,168,78,0.25);
+    border-radius:10px; padding:8px;
+  }
+  .opp-chip .opp-stack{ font-family:var(--mono); font-size:10px; color:var(--sage); margin-top:2px; }
+
+  /* chat */
+  .chat-panel{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:460px;
+    background:var(--baize-deep); border-top:1px solid var(--baize-line);
+    border-radius:16px 16px 0 0; z-index:40; display:flex; flex-direction:column;
+    max-height:60vh; box-shadow:0 -8px 24px rgba(0,0,0,0.4);
+    transition:transform 0.25s ease;
+  }
+  .chat-panel.collapsed{ transform:translateX(-50%) translateY(calc(100% - 48px)); }
+  .chat-header{ display:flex; align-items:center; justify-content:space-between; padding:13px 16px; cursor:pointer; }
+  .chat-header .chat-title{ font-weight:700; font-size:14px; }
+  .chat-header .chat-badge{ background:var(--clay); color:#fff; font-size:10px; font-family:var(--mono); padding:1px 6px; border-radius:8px; margin-left:6px; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:0 16px 8px; display:flex; flex-direction:column; gap:6px; }
+  .chat-msg{ font-size:13px; line-height:1.35; }
+  .chat-msg .who{ font-weight:700; color:var(--brass); }
+  .chat-input-row{ display:flex; gap:8px; padding:10px 16px 14px; }
+  .chat-input-row input{
+    flex:1; font-family:var(--ui); font-size:14px; text-transform:none; letter-spacing:0; text-align:left;
+    background:var(--baize); border:1px solid var(--baize-line); color:var(--cream); border-radius:10px; padding:11px;
+  }
+  .chat-input-row button{ background:var(--brass); color:var(--ink); padding:0 16px; border-radius:10px; font-weight:700; }
+  .chat-fab{
+    position:fixed; bottom:18px; right:18px; z-index:39; width:52px; height:52px; border-radius:50%;
+    background:var(--brass); color:var(--ink); font-size:22px; box-shadow:var(--shadow-deep);
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* money fly animation */
+  .money-fly{
+    position:fixed; font-family:var(--mono); font-weight:700; color:var(--brass); font-size:18px;
+    z-index:60; pointer-events:none; text-shadow:0 2px 6px rgba(0,0,0,0.6);
+  }
+  @keyframes coin-pop{ 0%{ transform:scale(0.6); opacity:0; } 30%{ transform:scale(1.1); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  .payout-row.animate{ animation:coin-pop 0.5s ease both; }
+
+  /* money tools row */
+  .money-tools{ display:flex; gap:8px; margin-top:2px; }
+  .money-tool-btn{
+    flex:1; padding:11px; border-radius:10px; font-size:13px; font-weight:600;
+    background:rgba(243,234,214,0.05); border:1.5px solid var(--baize-line); color:var(--cream);
+  }
+  .money-tool-btn.alt{ border-color:var(--brass); color:var(--brass); }
+
+  /* modal */
+  .modal-layer{
+    position:fixed; inset:0; background:rgba(11,30,23,0.82); z-index:70;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-card{
+    width:100%; max-width:360px; background:var(--baize-deep);
+    border:1px solid var(--baize-line); border-radius:var(--radius); padding:22px;
+  }
+  .modal-select{
+    width:100%; padding:14px; border-radius:var(--radius-sm); font-size:15px;
+    background:var(--baize); border:1.5px solid var(--baize-line); color:var(--cream); font-family:var(--ui);
+  }
+
+  /* toast */
+  .toast{
+    position:fixed; bottom:84px; left:50%; transform:translateX(-50%); z-index:80;
+    background:var(--ink); color:var(--cream); padding:12px 18px; border-radius:999px;
+    font-size:14px; border:1px solid var(--baize-line); box-shadow:var(--shadow-deep);
+  }
+
+  /* system chat message */
+  .chat-msg.system{ color:var(--brass); font-style:italic; }
+
+  /* admin wallets + ledger */
+  .wallet-grid{ display:flex; gap:10px; margin-bottom:16px; }
+  .wallet-card{ flex:1; padding:16px; text-align:center; }
+  .wallet-card.cold{ border-color:var(--baize-line); }
+  .wallet-card.hot{ border-color:var(--brass); }
+  .wallet-amt{ font-family:var(--mono); font-weight:700; font-size:24px; color:var(--brass); margin:4px 0; }
+  .wallet-card.cold .wallet-amt{ color:var(--cream); }
+  .admin-alert{
+    background:rgba(217,105,90,0.14); border:1px solid var(--clay); border-radius:10px;
+    padding:12px 14px; font-size:13px; color:var(--cream); margin-bottom:16px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .admin-ledger{ display:flex; flex-direction:column; gap:4px; }
+  .ledger-row{
+    display:grid; grid-template-columns: 1fr auto auto auto; gap:10px; align-items:center;
+    padding:9px 12px; background:var(--baize-deep); border:1px solid var(--baize-line);
+    border-radius:8px; font-size:13px;
+  }
+  .ledger-row.flagged{ border-color:var(--clay); background:rgba(217,105,90,0.10); }
+  .ledger-row .led-who{ font-weight:600; }
+  .ledger-row .led-reason{ font-family:var(--mono); font-size:11px; color:var(--cream-dim); }
+  .ledger-row .led-amt{ font-family:var(--mono); color:var(--sage); }
+  .ledger-row.flagged .led-amt{ color:var(--clay); }
+  .ledger-row .led-time{ font-family:var(--mono); font-size:11px; color:var(--cream-dim); }
+</style>
+</head>
+<body>
+
+<!-- ===================== GLOBAL STATUS BAR ===================== -->
+<div id="status-bar" class="status-bar">
+  <div class="status-left">
+    <span id="status-clock" class="status-clock">--:--</span>
+    <span id="status-battery" class="status-battery hidden"><span id="status-batt-icon">▮</span> <span id="status-batt-pct">--</span>%</span>
+  </div>
+  <button id="status-balance" class="status-balance hidden" data-nav="account">
+    <span class="sb-coin">●</span> <span id="status-bal-amount">0</span>
+  </button>
+</div>
+
+<!-- ===================== LANDING ===================== -->
+<div id="screen-landing" class="screen landing">
+  <div class="landing-topbar">
+    <button class="balance-pill hidden" id="balance-pill" data-nav="account">
+      <span class="bal-coin">●</span><span class="bal-amount">0</span>
+    </button>
+    <button class="account-btn hidden" id="btn-account" data-nav="account">Account</button>
+  </div>
+
+  <div class="logo-row">
+    <div class="die-mark">Q</div>
+    <div class="die-mark" style="transform:rotate(6deg); width:46px; height:62px; font-size:24px;">A</div>
+  </div>
+  <h1>Dice</h1>
+  <p class="tagline muted">Five in the cup. Everybody's bluffing. Last cup standing takes it.</p>
+  <div class="stack">
+    <button class="btn-primary" id="btn-go-create">Create a game</button>
+    <button class="btn-secondary" id="btn-go-join">Join with a code</button>
+    <button class="btn-ghost hidden" id="btn-go-admin" data-nav="admin">Bank panel</button>
+  </div>
+  <p class="landing-foot muted" id="landing-auth-line">
+    <button class="link-btn" id="btn-go-auth">Sign in</button> to play for chips, or just play for fun.
+  </p>
+</div>
+
+<!-- ===================== AUTH ===================== -->
+<div id="screen-auth" class="screen hidden">
+  <div class="topbar"><button class="back" data-nav="landing">&larr; back</button></div>
+  <h2 id="auth-title" style="margin-bottom:22px;">Welcome back</h2>
+
+  <button class="btn-google" id="auth-google">
+    <span class="g-mark">G</span> Continue with Google
+  </button>
+  <div class="auth-divider"><span>or</span></div>
+
+  <div class="field"><label>Email</label>
+    <input type="text" class="name-input" id="auth-email" placeholder="you@email.com" inputmode="email"></div>
+  <div class="field"><label>Password</label>
+    <input type="password" class="name-input" id="auth-password" placeholder="••••••••"></div>
+
+  <div class="field hidden" id="auth-handle-field"><label>Choose a handle (permanent)</label>
+    <input type="text" class="name-input" id="auth-handle" placeholder="rudy" maxlength="16">
+    <p class="muted" style="font-size:12px;margin-top:6px;">Letters, numbers, underscore. This is how friends and the bank find you.</p></div>
+
+  <div class="field hidden" id="auth-avatar-field"><label>Pick a picture</label>
+    <div class="avatar-picker" id="avatar-picker"></div>
+    <div class="avatar-photo-row">
+      <button type="button" class="avatar-photo-btn" id="avatar-take">📷 Take photo</button>
+      <button type="button" class="avatar-photo-btn" id="avatar-upload">🖼 From phone</button>
+    </div>
+    <input type="file" id="avatar-file-camera" accept="image/*" capture="user" class="hidden">
+    <input type="file" id="avatar-file-lib" accept="image/*" class="hidden">
+  </div>
+
+  <div class="field hidden" id="auth-referral-field"><label>Referral handle (optional)</label>
+    <input type="text" class="name-input" id="auth-referral" placeholder="who invited you?" maxlength="16"></div>
+
+  <p id="auth-error" class="auth-error" style="display:none;"></p>
+
+  <button class="btn-primary" id="auth-submit">Sign in</button>
+  <button class="btn-primary hidden" id="auth-claim-handle">Claim handle</button>
+  <p class="muted" id="auth-toggle-text" style="text-align:center;margin-top:16px;font-size:14px;"></p>
+</div>
+
+<!-- ===================== ACCOUNT ===================== -->
+<div id="screen-account" class="screen hidden">
+  <div class="topbar">
+    <button class="back" data-nav="landing">&larr; back</button>
+    <button class="back" id="btn-signout">sign out</button>
+  </div>
+  <div id="account-body"></div>
+</div>
+
+<!-- ===================== WHEEL ===================== -->
+<div id="screen-wheel" class="screen hidden">
+  <div class="topbar"><button class="back" data-nav="account">&larr; back</button></div>
+  <h2 style="text-align:center;margin-bottom:6px;">Daily Wheel</h2>
+  <p class="muted" style="text-align:center;margin-bottom:20px;">One free spin a day. Land your luck.</p>
+  <div class="wheel-stage">
+    <div class="wheel-pointer">▼</div>
+    <div class="wheel" id="wheel"></div>
+  </div>
+  <div id="wheel-result" class="wheel-result"></div>
+  <button class="btn-primary" id="btn-spin" style="margin-top:18px;">Spin</button>
+</div>
+
+<!-- ===================== ADMIN (BANK) ===================== -->
+<div id="screen-admin" class="screen hidden">
+  <div class="topbar"><button class="back" data-nav="landing">&larr; back</button>
+    <span class="eyebrow">Bank panel</span></div>
+
+  <div id="admin-alert" class="admin-alert hidden"></div>
+
+  <div class="wallet-grid">
+    <div class="card wallet-card cold">
+      <p class="eyebrow" style="margin-bottom:6px;">Cold bank</p>
+      <p class="wallet-amt" id="admin-cold-balance">—</p>
+      <p class="muted" style="font-size:11px;">Untouchable by the app</p>
+    </div>
+    <div class="card wallet-card hot">
+      <p class="eyebrow" style="margin-bottom:6px;">Hot wallet</p>
+      <p class="wallet-amt" id="admin-hot-balance">—</p>
+      <p class="muted" style="font-size:11px;">Pays bonuses · wheel · referrals</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <p class="eyebrow" style="margin-bottom:10px;">Top up hot wallet (from cold bank)</p>
+    <div class="btn-row">
+      <input type="text" class="name-input" id="topup-amount" placeholder="5000" inputmode="numeric" style="flex:1.4;">
+      <button class="btn-primary" id="btn-topup" style="flex:1;">Top up</button>
+    </div>
+    <p class="muted" id="topup-status" style="font-size:12px;margin-top:8px;">Recommended float: 5,000 chips.</p>
+  </div>
+
+  <h3 style="margin:18px 0 12px;">Send chips to a player</h3>
+  <div class="field"><label>Player handle</label>
+    <input type="text" class="name-input" id="admin-handle" placeholder="rudy" maxlength="16"></div>
+  <div class="field"><label>Amount</label>
+    <input type="text" class="name-input" id="admin-amount" placeholder="500" inputmode="numeric"></div>
+  <p id="admin-status" class="muted" style="font-size:13px;margin-bottom:14px;"></p>
+  <button class="btn-primary" id="btn-admin-send">Send chips</button>
+
+  <h3 style="margin:24px 0 12px;">Payout ledger</h3>
+  <div id="admin-ledger" class="admin-ledger"></div>
+</div>
+
+<!-- ===================== CREATE ===================== -->
+<div id="screen-create" class="screen hidden">
+  <div class="topbar">
+    <button class="back" data-nav="landing">&larr; back</button>
+  </div>
+  <h2 style="margin-bottom:24px;">Set up your table</h2>
+
+  <div class="field">
+    <label>Your name</label>
+    <input type="text" class="name-input" id="create-name" placeholder="What do they call you" maxlength="18">
+  </div>
+
+  <div class="field">
+    <label>Where's everyone sitting?</label>
+    <div class="mode-toggle">
+      <button class="mode-opt active" id="mode-same" data-mode="same">Same room</button>
+      <button class="mode-opt" id="mode-remote" data-mode="remote">Remote</button>
+    </div>
+    <p class="muted" style="font-size:13px; margin-top:10px;" id="mode-explainer">
+      One of you holds the phone for the opening question.
+    </p>
+  </div>
+
+  <div class="field">
+    <label>Playing for chips?</label>
+    <div class="mode-toggle">
+      <button class="mode-opt active" id="stakes-off" data-stakes="off">Just for fun</button>
+      <button class="mode-opt" id="stakes-on" data-stakes="on">Play for chips</button>
+    </div>
+    <p class="muted" style="font-size:12px; margin-top:8px;" id="stakes-signin-note"></p>
+  </div>
+
+  <div class="field hidden" id="stakes-fields">
+    <label>Chips per die left</label>
+    <input type="text" class="name-input" id="stake-amount" placeholder="e.g. 50" inputmode="numeric">
+    <p class="muted" style="font-size:12px; margin-top:8px;">
+      Last player standing collects this many chips per die they still hold, from every other player.
+    </p>
+  </div>
+
+  <button class="btn-primary" id="btn-create-confirm" style="margin-top:8px;">Create table</button>
+</div>
+
+<!-- ===================== JOIN ===================== -->
+<div id="screen-join" class="screen hidden">
+  <div class="topbar">
+    <button class="back" data-nav="landing">&larr; back</button>
+  </div>
+  <h2 style="margin-bottom:24px;">Join a table</h2>
+
+  <div class="field">
+    <label>Room code</label>
+    <input type="text" id="join-code" placeholder="XXXX" maxlength="4">
+  </div>
+  <div class="field">
+    <label>Your name</label>
+    <input type="text" class="name-input" id="join-name" placeholder="What do they call you" maxlength="18">
+  </div>
+
+  <p id="join-error" class="muted" style="color:var(--red); font-size:13px; margin-bottom:14px; display:none;"></p>
+
+  <button class="btn-primary" id="btn-join-confirm">Sit down</button>
+</div>
+
+<!-- ===================== LOBBY ===================== -->
+<div id="screen-lobby" class="screen hidden">
+  <div class="topbar">
+    <button class="back" id="btn-leave-lobby">&larr; leave</button>
+    <span class="eyebrow" id="lobby-mode-label">SAME ROOM</span>
+  </div>
+
+  <p class="eyebrow">Room code</p>
+  <div class="room-code-display" id="lobby-code">----</div>
+  <p class="muted" id="lobby-stakes-display" style="text-align:center; margin-bottom:4px;"></p>
+
+  <p class="muted" style="text-align:center; margin-bottom:20px;">Share this code. Everyone taps "Join with a code."</p>
+
+  <div class="player-roster" id="lobby-roster"></div>
+
+  <div id="bot-add-zone" class="card" style="margin-bottom:16px; display:none;">
+    <p class="eyebrow" style="margin-bottom:12px;">Add a bot</p>
+    <div class="face-grid" id="bot-difficulty-grid">
+      <button type="button" class="face-opt active" data-diff="noob">Noob</button>
+      <button type="button" class="face-opt" data-diff="average">Average</button>
+      <button type="button" class="face-opt" data-diff="serious">Serious</button>
+      <button type="button" class="face-opt" data-diff="godlike">Godlike</button>
+    </div>
+    <button class="btn-secondary" id="btn-add-bot" style="margin-top:12px;">+ Add bot to table</button>
+  </div>
+
+  <button class="btn-primary" id="btn-start-game" style="margin-top:auto;" disabled>Waiting for players&hellip;</button>
+  <p class="muted" style="text-align:center; font-size:12px; margin-top:10px;">Need at least 2 players to start. Bots count.</p>
+</div>
+
+<!-- ===================== FUNNY QUESTION ===================== -->
+<div id="screen-funny" class="screen hidden fq-wrap">
+  <p class="eyebrow" style="text-align:center;">First round, the old-fashioned way</p>
+  <div id="fq-question" class="fq-question"></div>
+  <div id="fq-body"></div>
+</div>
+
+<!-- ===================== TABLE (MAIN GAME) ===================== -->
+<div id="screen-table" class="screen table-screen hidden">
+  <div id="conn-banner" class="conn-banner hidden">Reconnecting&hellip;</div>
+
+  <div class="hud">
+    <span>Room <b style="color:var(--gold)" id="hud-code">----</b></span>
+    <span class="round-no" id="hud-round">Round 1</span>
+  </div>
+
+  <!-- round felt table: seats arranged around the rim, claim in the center -->
+  <div class="felt-table" id="felt-table">
+    <div class="felt-surface">
+      <div class="felt-center" id="felt-center">
+        <div class="felt-claim-label">Current claim</div>
+        <div class="current-bid empty" id="current-bid-display">
+          <div class="claim">Opening bid</div>
+        </div>
+      </div>
+      <div class="seats" id="seats"></div>
+    </div>
+  </div>
+
+  <div class="your-dice">
+    <div class="your-dice-label">
+      <span>Your cup</span>
+      <button class="cup-toggle" id="cup-toggle">Tap to reveal</button>
+    </div>
+    <div class="dice-row" id="your-dice-row"></div>
+  </div>
+
+  <div class="action-zone" id="action-zone"></div>
+</div>
+
+<!-- ===================== CHAT PANEL (table only) ===================== -->
+<div id="chat-panel" class="chat-panel collapsed hidden">
+  <div class="chat-header" id="chat-header">
+    <span class="chat-title">Table chat <span class="chat-badge hidden" id="chat-badge">0</span></span>
+    <span id="chat-chevron" style="color:var(--cream-dim);font-family:var(--mono);font-size:12px;">tap</span>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Say something…" maxlength="160">
+    <button id="chat-send">Send</button>
+  </div>
+</div>
+
+<!-- modal layer + toast -->
+<div id="modal-layer" class="modal-layer hidden"></div>
+<div id="toast" class="toast hidden"></div>
+
+<!-- ===================== ROUND-OVER (ready-up) ===================== -->
+<div id="overlay-reveal" class="reveal-overlay hidden">
+  <p class="eyebrow" id="reveal-claim-label">THE CLAIM</p>
+  <div class="verdict" id="reveal-verdict">&mdash;</div>
+  <div class="reveal-grid" id="reveal-grid"></div>
+  <p class="reveal-count" id="reveal-count"></p>
+  <p class="muted" id="reveal-consequence"></p>
+  <div class="reveal-counts" id="reveal-counts"></div>
+  <div class="reveal-action" id="reveal-action"></div>
+</div>
+
+<!-- ===================== ENDGAME ===================== -->
+<div id="screen-end" class="screen end-screen hidden">
+  <p class="eyebrow">Game over</p>
+  <h1 id="end-winner-name">&mdash;</h1>
+  <p class="muted" id="end-subtext"></p>
+  <div id="payout-card" class="card hidden" style="width:100%; max-width:340px; text-align:left; margin-top:8px;">
+    <p class="eyebrow" style="margin-bottom:12px;">Settle up</p>
+    <div id="payout-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <div style="border-top:1px solid var(--baize-line); margin-top:14px; padding-top:12px; display:flex; justify-content:space-between;">
+      <span class="muted" style="font-size:13px;">Total collected</span>
+      <span id="payout-total" style="font-family:var(--display); font-weight:700; color:var(--gold);"></span>
+    </div>
+  </div>
+  <div id="session-board" class="card hidden" style="width:100%; max-width:340px; text-align:left; margin-top:12px;"></div>
+  <button class="btn-primary" id="btn-play-again" style="margin-top:20px; max-width:260px;">Back to start</button>
+</div>
+
+<script type="module">
+/* =========================================================================
+   DICE — single-file multiplayer client
+   Backend: Firebase Realtime Database (placeholder config — swap in your own)
+   =========================================================================
+   DATA MODEL (under /rooms/{CODE}):
+   {
+     code, mode: "same"|"remote", phase: "lobby"|"funny"|"playing"|"roundover"|"ended",
+     hostId,
+     createdAt,
+     players: {
+       [playerId]: { name, seat, diceCount, dice:[face,...] (private, written by owner only),
+                     connected, eliminated }
+     },
+     turnOrder: [playerId,...],         // seat order, rotates direction
+     direction: 1 | -1,
+     currentTurnPlayerId,
+     currentBid: { quantity, face, byPlayerId } | null,
+     bidHistory: [...],
+     round: 1,
+     funnyQuestion: { text, options:[...], resolved:bool, chosenPlayerId },
+     lastReveal: { ... } | null,
+     winnerPlayerId: null
+   }
+   ========================================================================= */
+
+// ---- Firebase ----
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getDatabase, ref, set, get, update, onValue, runTransaction,
+  onDisconnect, serverTimestamp, child, remove
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import {
+  getAuth, onAuthStateChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
+  sendEmailVerification, GoogleAuthProvider, signInWithPopup
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCycYPhXn8vuTItg714fDvedOEJm6z6o_I",
+  authDomain: "dice---liars-cup.firebaseapp.com",
+  databaseURL: "https://dice---liars-cup-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "dice---liars-cup",
+  storageBucket: "dice---liars-cup.firebasestorage.app",
+  messagingSenderId: "110625280962",
+  appId: "1:110625280962:web:da180a944d338be0123c5b"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+
+// ---- Economy / account constants ----
+const ADMIN_UID = "BYT0qnAl4fS13n4Lrm5edQGE8c53"; // the COLD bank — only this account, signed in, may move its own balance
+const HOT_WALLET_TARGET = 5000;   // recommended hot-wallet float
+const ANOMALY_SINGLE_PAYOUT = 600; // any single payout above this is flagged (max legit = wheel 500)
+const SIGNUP_BONUS = 100;
+const WHEEL_PRIZES = [
+  // weighted wheel: mostly small, rare jackpot. weight = relative chance.
+  { amount: 10,  weight: 34 },
+  { amount: 20,  weight: 26 },
+  { amount: 30,  weight: 16 },
+  { amount: 50,  weight: 12 },
+  { amount: 100, weight: 7  },
+  { amount: 250, weight: 4  },
+  { amount: 500, weight: 1  }
+];
+const REFERRAL_TIERS = [ { count: 5, reward: 10 }, { count: 20, reward: 100 } ];
+const SPIN_COOLDOWN_MS = 24*60*60*1000;
+const ASK_TABLE_MIN = 1, ASK_TABLE_MAX = 10;
+const TRANSFER_MIN = 1, TRANSFER_MAX = 10;
+
+// ---- Avatars: 12 built-in SVG characters (no hosting needed) ----
+// Each is a {bg, face} — a colored disc with a simple friendly character.
+const AVATARS = [
+  { id:"a1",  bg:"#C8453B", glyph:"🎲" },
+  { id:"a2",  bg:"#2E8B57", glyph:"🃏" },
+  { id:"a3",  bg:"#3A6EA5", glyph:"♠" },
+  { id:"a4",  bg:"#E0A84E", glyph:"♦" },
+  { id:"a5",  bg:"#7B61FF", glyph:"♣" },
+  { id:"a6",  bg:"#D9695A", glyph:"♥" },
+  { id:"a7",  bg:"#4F8A72", glyph:"🦊" },
+  { id:"a8",  bg:"#B07E2E", glyph:"🦉" },
+  { id:"a9",  bg:"#3DDC97", glyph:"🐺" },
+  { id:"a10", bg:"#A84A3E", glyph:"🦁" },
+  { id:"a11", bg:"#5A8C7A", glyph:"🎭" },
+  { id:"a12", bg:"#7FA8D9", glyph:"👑" }
+];
+function avatarById(id){ return AVATARS.find(a => a.id === id) || AVATARS[0]; }
+// returns inline HTML for an avatar at a given pixel size.
+// id can be a sample id ("a1".."a12") OR a "photo:" prefixed data-URL (tiny thumbnail).
+function avatarHTML(id, size){
+  if(id && id.indexOf("photo:") === 0){
+    const url = id.slice(6);
+    return `<span class="avatar img" style="width:${size}px;height:${size}px;background-image:url('${url}');"></span>`;
+  }
+  const a = avatarById(id);
+  return `<span class="avatar" style="width:${size}px;height:${size}px;background:${a.bg};font-size:${Math.round(size*0.52)}px;">${a.glyph}</span>`;
+}
+
+// ---- Constants ----
+const FACES = ["9","10","J","Q","K","A"]; // ranking low -> high. Ace is highest face AND the wild face.
+const WILD_FACE = "A";
+const STARTING_DICE = 5;
+const MIN_PLAYERS = 2;
+const MAX_PLAYERS = 10;
+
+const FUNNY_QUESTIONS = [
+  { text: "Who went to the bathroom most recently?" },
+  { text: "Who's wearing the most uncomfortable shoes right now?" },
+  { text: "Who has the most unread messages on their phone?" },
+  { text: "Who last sent a text they immediately regretted?" },
+  { text: "Who's most likely to fall asleep first tonight?" },
+  { text: "Who has the messiest car?" },
+  { text: "Who's the worst at keeping secrets?" },
+  { text: "Who last lied about being 'on the way'?" },
+  { text: "Who has the most embarrassing thing in their search history?" },
+  { text: "Who's most likely to start an argument over a board game?" }
+];
+
+// ---- Local state ----
+let myPlayerId = localStorage.getItem("liarscup_pid") || null;
+let myName = "";
+let roomCode = null;
+let unsubRoom = null;
+let lastRoomSnapshot = null;
+let cupRevealed = false;
+
+// ---- Account session state ----
+let currentUser = null;       // Firebase auth user (or null = guest)
+let myAccount = null;         // /users/{uid} snapshot (handle, balance, ...)
+let unsubAccount = null;      // live listener on my account
+let isAdmin = false;          // true when signed in as the bank
+let pendingFlow = null;       // "create" | "join" — where to go after a money-game sign-in
+let sessionLedger = {};       // {handle: net chips this session} for the scoreboard
+let askedTableThisSession = false;
+
+function genPlayerId(){
+  const id = "p_" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem("liarscup_pid", id);
+  return id;
+}
+if(!myPlayerId){ myPlayerId = genPlayerId(); }
+
+// ---- Nav helpers ----
+const screens = ["landing","auth","account","wheel","admin","create","join","lobby","funny","table","end"];
+function showScreen(name){
+  screens.forEach(s => {
+    const el = document.getElementById("screen-" + s);
+    if(el) el.classList.toggle("hidden", s !== name);
+  });
+}
+document.querySelectorAll("[data-nav]").forEach(btn => {
+  btn.addEventListener("click", () => showScreen(btn.dataset.nav));
+});
+
+showScreen("landing");
+
+// =====================================================================
+// ACCOUNT / AUTH ENGINE
+// All real money lives at /users/{uid}/balance. The security rules (pasted
+// separately) enforce that only the owner can spend their own balance and
+// only the bank (ADMIN_UID) can mint new chips. Nothing here can be trusted
+// by the database — the rules are the real guard. This JS is just the UI.
+// =====================================================================
+
+onAuthStateChanged(auth, async (user) => {
+  if(unsubAccount){ unsubAccount(); unsubAccount = null; }
+  currentUser = user || null;
+  isAdmin = !!(user && user.uid === ADMIN_UID);
+
+  if(!user){
+    myAccount = null;
+    updateAccountChrome();
+    return;
+  }
+
+  const uref = ref(db, `users/${user.uid}`);
+  const snap = await get(uref);
+  if(snap.exists()){
+    unsubAccount = onValue(uref, (s) => {
+      myAccount = s.val();
+      updateAccountChrome();
+      if(!document.getElementById("screen-account").classList.contains("hidden")){
+        renderAccountScreen();
+      }
+    });
+    claimBonusIfNewlyVerified();
+  } else {
+    myAccount = null;
+    promptHandleClaim(user);
+  }
+  updateAccountChrome();
+});
+
+function updateAccountChrome(){
+  const signedIn = !!currentUser && !!myAccount;
+  // global status-bar balance (big, always visible when signed in)
+  const sbBal = document.getElementById("status-balance");
+  if(sbBal){
+    sbBal.classList.toggle("hidden", !signedIn);
+    if(signedIn) document.getElementById("status-bal-amount").textContent = formatStake(myAccount.balance||0);
+  }
+  const accBtn = document.getElementById("btn-account");
+  if(accBtn) accBtn.classList.toggle("hidden", !currentUser);
+  const adminBtn = document.getElementById("btn-go-admin");
+  if(adminBtn) adminBtn.classList.toggle("hidden", !isAdmin);
+}
+
+// ---------------- STATUS BAR: clock + battery ----------------
+function startStatusClock(){
+  function tick(){
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mm = String(d.getMinutes()).padStart(2,"0");
+    const el = document.getElementById("status-clock");
+    if(el) el.textContent = `${hh}:${mm}`;
+  }
+  tick();
+  setInterval(tick, 15000);
+}
+async function startBatteryMonitor(){
+  // Battery API only works on some browsers (Chrome/Android). Where unsupported
+  // (iOS/Safari), we simply hide the battery and show the clock alone.
+  if(!navigator.getBattery){ return; }
+  try{
+    const bat = await navigator.getBattery();
+    const wrap = document.getElementById("status-battery");
+    const update = () => {
+      const pct = Math.round(bat.level * 100);
+      document.getElementById("status-batt-pct").textContent = pct;
+      document.getElementById("status-batt-icon").textContent = bat.charging ? "⚡" : "▮";
+      wrap.classList.toggle("low", pct <= 20 && !bat.charging);
+      wrap.classList.remove("hidden");
+    };
+    update();
+    bat.addEventListener("levelchange", update);
+    bat.addEventListener("chargingchange", update);
+  }catch{ /* unsupported — leave battery hidden */ }
+}
+startStatusClock();
+startBatteryMonitor();
+
+function normalizeHandle(h){
+  return (h||"").toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16);
+}
+async function handleIsFree(handle){
+  const snap = await get(ref(db, `handles/${handle}`));
+  return !snap.exists();
+}
+
+// =====================================================================
+// HOT WALLET PAYOUTS — the app draws all credits (bonus, wheel, referral)
+// from a small "hot wallet" float, NOT the cold bank. Every payout writes a
+// ledger entry. If the hot wallet runs dry, payouts fail gracefully and the
+// admin must top it up from the cold bank by hand. This caps any breach to
+// the hot float and makes theft visible in the ledger.
+// =====================================================================
+async function payFromHotWallet(toUid, amount, reason){
+  if(amount <= 0) return true;
+  // atomically deduct from the hot wallet only if it can cover the amount
+  const res = await runTransaction(ref(db, `hotWallet/balance`), (b) => {
+    const cur = b || 0;
+    if(cur < amount) return; // abort — hot wallet can't cover
+    return cur - amount;
+  });
+  if(!res.committed || res.snapshot.val() === null) return false;
+  // credit the player
+  await runTransaction(ref(db, `users/${toUid}/balance`), (b) => (b||0) + amount);
+  // write a ledger entry (audit trail + anomaly source)
+  await logLedger({ toUid, amount, reason });
+  return true;
+}
+
+// Append-only ledger of every hot-wallet payout.
+async function logLedger(entry){
+  const id = "L_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
+  const handleSnap = await get(ref(db, `users/${entry.toUid}/handle`));
+  await set(ref(db, `ledger/${id}`), {
+    toUid: entry.toUid,
+    toHandle: handleSnap.exists() ? handleSnap.val() : "?",
+    amount: entry.amount,
+    reason: entry.reason || "payout",
+    flagged: entry.amount > ANOMALY_SINGLE_PAYOUT,
+    ts: Date.now()
+  });
+}
+
+async function createAccountRecord(user, handle, referredByHandle, avatar){
+  handle = normalizeHandle(handle);
+  const verified = !!user.emailVerified;
+  let referredByUid = null;
+  if(referredByHandle){
+    const rh = normalizeHandle(referredByHandle);
+    const rsnap = await get(ref(db, `handles/${rh}`));
+    if(rsnap.exists()) referredByUid = rsnap.val();
+  }
+  // account starts at 0; the $100 bonus is paid FROM THE BANK (below)
+  const userRecord = {
+    handle,
+    email: user.email || "",
+    avatar: avatar || "a1",
+    balance: 0,
+    verified,
+    bonusClaimed: false,
+    gamesCompleted: 0,
+    referredBy: referredByUid || null,
+    referralCredited: false,
+    referralCount: 0,
+    lastSpin: 0,
+    reminderOptIn: false,
+    createdAt: serverTimestamp()
+  };
+  const updates = {};
+  updates[`users/${user.uid}`] = userRecord;
+  updates[`handles/${handle}`] = user.uid;
+  await update(ref(db), updates);
+
+  // pay the signup bonus from the bank if already verified (Google users)
+  if(verified){
+    const paid = await payFromHotWallet(user.uid, SIGNUP_BONUS, "signup-bonus");
+    if(paid) await update(ref(db, `users/${user.uid}`), { bonusClaimed: true });
+  }
+}
+
+// ---------------- AUTH SCREEN ----------------
+let authMode = "signin";
+let selectedAvatar = "a1"; // chosen at signup
+
+function renderAvatarPicker(){
+  const grid = document.getElementById("avatar-picker");
+  if(!grid) return;
+  grid.innerHTML = "";
+  AVATARS.forEach(a => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "avatar-opt" + (selectedAvatar === a.id ? " active":"");
+    btn.innerHTML = avatarHTML(a.id, 44);
+    btn.addEventListener("click", () => { selectedAvatar = a.id; renderAvatarPicker(); });
+    grid.appendChild(btn);
+  });
+}
+
+// shrink a chosen image to a ~128px circular thumbnail, returned as a tiny data-URL
+function fileToThumbnail(file, cb){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const S = 128;
+      const canvas = document.createElement("canvas");
+      canvas.width = S; canvas.height = S;
+      const ctx = canvas.getContext("2d");
+      // center-crop square
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side)/2, sy = (img.height - side)/2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, S, S);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.7); // ~6-12KB
+      cb("photo:" + dataUrl);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function wireAvatarPhotoButtons(){
+  const camBtn = document.getElementById("avatar-take");
+  const libBtn = document.getElementById("avatar-upload");
+  const camIn = document.getElementById("avatar-file-camera");
+  const libIn = document.getElementById("avatar-file-lib");
+  if(!camBtn) return;
+  camBtn.onclick = () => camIn.click();
+  libBtn.onclick = () => libIn.click();
+  const handleFile = (input) => {
+    const f = input.files && input.files[0];
+    if(!f) return;
+    fileToThumbnail(f, (thumb) => {
+      selectedAvatar = thumb;
+      // show the chosen photo as a temporary "selected" tile at the front
+      const grid = document.getElementById("avatar-picker");
+      grid.querySelectorAll(".avatar-opt").forEach(o=>o.classList.remove("active"));
+      const tile = document.createElement("button");
+      tile.type = "button"; tile.className = "avatar-opt active";
+      tile.innerHTML = avatarHTML(thumb, 44);
+      grid.prepend(tile);
+    });
+  };
+  camIn.onchange = () => handleFile(camIn);
+  libIn.onchange = () => handleFile(libIn);
+}
+
+function openAuth(flow){
+  pendingFlow = flow || null;
+  authMode = "signin";
+  resetAuthChrome();
+  renderAuthScreen();
+  showScreen("auth");
+}
+
+function resetAuthChrome(){
+  document.getElementById("auth-submit").classList.remove("hidden");
+  document.getElementById("auth-google").classList.remove("hidden");
+  document.getElementById("auth-email").parentElement.classList.remove("hidden");
+  document.getElementById("auth-password").parentElement.classList.remove("hidden");
+  document.getElementById("auth-toggle-text").classList.remove("hidden");
+  document.getElementById("auth-claim-handle").classList.add("hidden");
+  const err = document.getElementById("auth-error");
+  err.style.color = "var(--clay)"; err.style.display = "none";
+}
+
+function renderAuthScreen(){
+  document.getElementById("auth-title").textContent = authMode === "signup" ? "Create your account" : "Welcome back";
+  document.getElementById("auth-submit").textContent = authMode === "signup" ? "Create account" : "Sign in";
+  document.getElementById("auth-toggle-text").innerHTML = authMode === "signup"
+    ? `Already have an account? <button class="link-btn" id="auth-toggle">Sign in</button>`
+    : `New here? <button class="link-btn" id="auth-toggle">Create an account</button>`;
+  document.getElementById("auth-handle-field").classList.toggle("hidden", authMode !== "signup");
+  document.getElementById("auth-avatar-field").classList.toggle("hidden", authMode !== "signup");
+  document.getElementById("auth-referral-field").classList.toggle("hidden", authMode !== "signup");
+  if(authMode === "signup"){ renderAvatarPicker(); wireAvatarPhotoButtons(); }
+  document.getElementById("auth-error").style.display = "none";
+  document.getElementById("auth-toggle").addEventListener("click", () => {
+    authMode = authMode === "signup" ? "signin" : "signup";
+    renderAuthScreen();
+  });
+}
+
+function authError(msg){
+  const el = document.getElementById("auth-error");
+  el.textContent = msg; el.style.color = "var(--clay)"; el.style.display = "block";
+}
+
+async function doEmailAuth(){
+  const email = document.getElementById("auth-email").value.trim();
+  const pass  = document.getElementById("auth-password").value;
+  if(!email || !pass){ authError("Enter your email and password."); return; }
+  try{
+    if(authMode === "signup"){
+      const handle = normalizeHandle(document.getElementById("auth-handle").value);
+      const referral = document.getElementById("auth-referral").value.trim();
+      if(handle.length < 3){ authError("Pick a handle of at least 3 letters/numbers."); return; }
+      if(!(await handleIsFree(handle))){ authError("That handle's taken — try another."); return; }
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await createAccountRecord(cred.user, handle, referral, selectedAvatar);
+      await sendEmailVerification(cred.user);
+      showVerifyNotice();
+    } else {
+      await signInWithEmailAndPassword(auth, email, pass);
+      afterSignIn();
+    }
+  } catch(e){ authError(friendlyAuthError(e)); }
+}
+
+async function doGoogleAuth(){
+  try{
+    const cred = await signInWithPopup(auth, googleProvider);
+    const snap = await get(ref(db, `users/${cred.user.uid}`));
+    if(!snap.exists()) promptHandleClaim(cred.user);
+    else afterSignIn();
+  } catch(e){ authError(friendlyAuthError(e)); }
+}
+
+function friendlyAuthError(e){
+  const c = (e && e.code) || "";
+  if(c.includes("email-already-in-use")) return "That email already has an account — sign in instead.";
+  if(c.includes("invalid-email")) return "That email doesn't look right.";
+  if(c.includes("weak-password")) return "Password should be at least 6 characters.";
+  if(c.includes("wrong-password")||c.includes("invalid-credential")) return "Wrong email or password.";
+  if(c.includes("user-not-found")) return "No account with that email.";
+  if(c.includes("popup-closed")) return "Sign-in cancelled.";
+  return "Something went wrong — try again.";
+}
+
+function afterSignIn(){
+  const flow = pendingFlow; pendingFlow = null;
+  if(flow === "create") showScreen("create");
+  else if(flow === "join") showScreen("join");
+  else showScreen("landing");
+}
+
+function showVerifyNotice(){
+  showScreen("auth");
+  const el = document.getElementById("auth-error");
+  el.style.display = "block"; el.style.color = "var(--sage)";
+  el.innerHTML = "Account created! Check your email and tap the verification link, then sign in. Your $100 lands once you're verified.";
+}
+
+function promptHandleClaim(user){
+  showScreen("auth");
+  resetAuthChrome();
+  document.getElementById("auth-title").textContent = "Pick your handle";
+  document.getElementById("auth-submit").classList.add("hidden");
+  document.getElementById("auth-google").classList.add("hidden");
+  document.getElementById("auth-email").parentElement.classList.add("hidden");
+  document.getElementById("auth-password").parentElement.classList.add("hidden");
+  document.getElementById("auth-toggle-text").classList.add("hidden");
+  document.getElementById("auth-handle-field").classList.remove("hidden");
+  document.getElementById("auth-referral-field").classList.remove("hidden");
+  const claimBtn = document.getElementById("auth-claim-handle");
+  claimBtn.classList.remove("hidden");
+  claimBtn.onclick = async () => {
+    const handle = normalizeHandle(document.getElementById("auth-handle").value);
+    const referral = document.getElementById("auth-referral").value.trim();
+    if(handle.length < 3){ authError("Pick a handle of at least 3 letters/numbers."); return; }
+    if(!(await handleIsFree(handle))){ authError("That handle's taken — try another."); return; }
+    await createAccountRecord(user, handle, referral, selectedAvatar);
+    afterSignIn();
+  };
+}
+
+async function claimBonusIfNewlyVerified(){
+  if(!currentUser || !myAccount) return;
+  if(myAccount.bonusClaimed) return;
+  await currentUser.reload();
+  if(currentUser.emailVerified){
+    // mark verified, then pay the bonus FROM THE BANK
+    await update(ref(db, `users/${currentUser.uid}`), { verified: true });
+    const paid = await payFromHotWallet(currentUser.uid, SIGNUP_BONUS, "signup-bonus");
+    if(paid){
+      await update(ref(db, `users/${currentUser.uid}`), { bonusClaimed: true });
+    }
+  }
+}
+
+// ===================== CREATE FLOW =====================
+document.getElementById("btn-go-create").addEventListener("click", () => showScreen("create"));
+document.getElementById("btn-go-join").addEventListener("click", () => showScreen("join"));
+
+// ---------------- auth / account button wiring ----------------
+document.getElementById("btn-go-auth").addEventListener("click", () => openAuth(null));
+document.getElementById("auth-submit").addEventListener("click", doEmailAuth);
+document.getElementById("auth-google").addEventListener("click", doGoogleAuth);
+document.getElementById("btn-signout").addEventListener("click", async () => {
+  await signOut(auth); showScreen("landing");
+});
+document.getElementById("auth-handle").addEventListener("input", (e) => {
+  e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16);
+});
+document.getElementById("auth-referral").addEventListener("input", (e) => {
+  e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16);
+});
+
+// when entering the account screen, render it
+const _origShowScreen = showScreen;
+function gotoAccount(){
+  if(!currentUser){ openAuth(null); return; }
+  renderAccountScreen(); showScreen("account");
+}
+document.getElementById("btn-account").addEventListener("click", gotoAccount);
+document.getElementById("balance-pill").addEventListener("click", gotoAccount);
+document.getElementById("status-balance").addEventListener("click", gotoAccount);
+
+// ---------------- ACCOUNT SCREEN ----------------
+function renderAccountScreen(){
+  const body = document.getElementById("account-body");
+  if(!myAccount){ body.innerHTML = `<p class="muted">Loading account…</p>`; return; }
+  const a = myAccount;
+  const canSpin = (Date.now() - (a.lastSpin||0)) >= SPIN_COOLDOWN_MS;
+  const nextSpinIn = SPIN_COOLDOWN_MS - (Date.now() - (a.lastSpin||0));
+  const refsNeeded = REFERRAL_TIERS.find(t => (a.referralCount||0) < t.count);
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:6px;">
+      ${avatarHTML(a.avatar || 'a1', 72)}
+      <div class="acct-handle">@${escapeHtml(a.handle)}</div>
+    </div>
+    <div class="acct-balance">
+      <div class="amt">${formatStake(a.balance||0)}</div>
+      <div class="lbl">chips</div>
+    </div>
+    ${!a.verified ? `<div class="acct-verify-warn">
+        Your email isn't verified yet. Tap the link we sent, then reopen the app — your $100 bonus lands automatically.
+        <button class="link-btn" id="resend-verify" style="display:block;margin-top:8px;">Resend verification email</button>
+      </div>` : ``}
+    <div class="acct-tiles">
+      <button class="acct-tile" id="tile-wheel" ${canSpin?"":"disabled"}>
+        <span class="tile-main"><span class="tile-title">Daily Wheel</span>
+          <span class="tile-sub">${canSpin?"A free spin is ready":"Come back in "+hoursLeft(nextSpinIn)}</span></span>
+        <span class="tile-cta">${canSpin?"Spin →":"⏳"}</span>
+      </button>
+      <div class="acct-tile">
+        <span class="tile-main"><span class="tile-title">Invite friends</span>
+          <span class="tile-sub">${(a.referralCount||0)} joined${refsNeeded?` · ${refsNeeded.count-(a.referralCount||0)} more for $${refsNeeded.reward}`:` · all rewards claimed`}</span></span>
+        <span class="acct-referral-code">@${escapeHtml(a.handle)}</span>
+      </div>
+      <button class="acct-tile" id="tile-reminder">
+        <span class="tile-main"><span class="tile-title">Play reminders</span>
+          <span class="tile-sub">${a.reminderOptIn ? "On — we'll nudge you when the app goes mobile" : "Off — get reminded to play & spin (coming with the app)"}</span></span>
+        <span class="tile-cta">${a.reminderOptIn ? "On" : "Off"}</span>
+      </button>
+      ${isAdmin?`<button class="acct-tile" id="tile-admin">
+        <span class="tile-main"><span class="tile-title">Bank panel</span>
+          <span class="tile-sub">Send chips to players</span></span>
+        <span class="tile-cta">Open →</span></button>`:``}
+    </div>
+  `;
+
+  const resend = document.getElementById("resend-verify");
+  if(resend) resend.addEventListener("click", async () => {
+    try{ await sendEmailVerification(currentUser); resend.textContent = "Sent — check your inbox."; }
+    catch{ resend.textContent = "Try again in a minute."; }
+  });
+  const tw = document.getElementById("tile-wheel");
+  if(tw) tw.addEventListener("click", () => { renderWheel(); showScreen("wheel"); });
+  const ta = document.getElementById("tile-admin");
+  if(ta) ta.addEventListener("click", () => { renderAdmin(); showScreen("admin"); });
+  const tr = document.getElementById("tile-reminder");
+  if(tr) tr.addEventListener("click", async () => {
+    // saved preference only — does nothing until the mobile app ships push
+    await update(ref(db, `users/${currentUser.uid}`), { reminderOptIn: !a.reminderOptIn });
+  });
+}
+
+function hoursLeft(ms){
+  const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+  return h>0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ---------------- WHEEL ----------------
+function weightedPrize(){
+  const total = WHEEL_PRIZES.reduce((s,p)=>s+p.weight,0);
+  let r = Math.random()*total;
+  for(const p of WHEEL_PRIZES){ if(r < p.weight) return p; r -= p.weight; }
+  return WHEEL_PRIZES[0];
+}
+let wheelSpinning = false;
+function renderWheel(){
+  const wheel = document.getElementById("wheel");
+  wheel.style.transform = "rotate(0deg)";
+  wheel.innerHTML = "";
+  const n = WHEEL_PRIZES.length;
+  const seg = 360/n;
+  // draw conic-gradient slices + labels
+  const colors = ["#1F4A3D","#23533F","#2C6151","#1B4133","#245A4A","#2E8B57","#3A6EA5"];
+  let grad = WHEEL_PRIZES.map((p,i)=>`${colors[i%colors.length]} ${i*seg}deg ${(i+1)*seg}deg`).join(",");
+  wheel.style.background = `conic-gradient(${grad})`;
+  WHEEL_PRIZES.forEach((p,i)=>{
+    const lab = document.createElement("div");
+    lab.className = "wheel-seg-label";
+    const ang = (i+0.5)*seg;
+    lab.style.transform = `rotate(${ang}deg) translate(96px) rotate(90deg)`;
+    lab.textContent = "$"+p.amount;
+    wheel.appendChild(lab);
+  });
+  document.getElementById("wheel-result").textContent = "";
+  const btn = document.getElementById("btn-spin");
+  btn.disabled = false; btn.textContent = "Spin";
+}
+document.getElementById("btn-spin").addEventListener("click", async () => {
+  if(wheelSpinning || !myAccount) return;
+  if((Date.now() - (myAccount.lastSpin||0)) < SPIN_COOLDOWN_MS){
+    document.getElementById("wheel-result").textContent = "Already spun today.";
+    return;
+  }
+  wheelSpinning = true;
+  const btn = document.getElementById("btn-spin"); btn.disabled = true;
+  const prize = weightedPrize();
+  const idx = WHEEL_PRIZES.indexOf(prize);
+  const seg = 360/WHEEL_PRIZES.length;
+  const targetAngle = 360*6 + (360 - (idx*seg + seg/2)); // land pointer on prize
+  document.getElementById("wheel").style.transform = `rotate(${targetAngle}deg)`;
+  setTimeout(async () => {
+    // record the spin first (so the daily cooldown applies even if bank is dry)
+    await update(ref(db, `users/${currentUser.uid}`), { lastSpin: Date.now() });
+    // pay the prize FROM THE BANK
+    const paid = await payFromHotWallet(currentUser.uid, prize.amount, "wheel");
+    document.getElementById("wheel-result").textContent = paid
+      ? `You won $${prize.amount}!`
+      : "Prizes temporarily unavailable — try again later.";
+    wheelSpinning = false;
+  }, 4700);
+});
+
+// ---------------- ADMIN (BANK) ----------------
+async function renderAdmin(){
+  document.getElementById("admin-status").textContent = "";
+  document.getElementById("topup-status").textContent = "Recommended float: 5,000 chips.";
+  const coldSnap = await get(ref(db, `users/${ADMIN_UID}/balance`));
+  const hotSnap  = await get(ref(db, `hotWallet/balance`));
+  const cold = coldSnap.exists() ? coldSnap.val() : 0;
+  const hot  = hotSnap.exists()  ? hotSnap.val()  : 0;
+  document.getElementById("admin-cold-balance").textContent = formatStake(cold);
+  document.getElementById("admin-hot-balance").textContent = formatStake(hot);
+
+  // low hot-wallet warning
+  const alert = document.getElementById("admin-alert");
+  let alertMsgs = [];
+  if(hot < 500) alertMsgs.push(`Hot wallet is low (${formatStake(hot)}). Top it up so payouts keep working.`);
+
+  // ledger + anomaly scan
+  const ledSnap = await get(ref(db, `ledger`));
+  const entries = ledSnap.exists() ? Object.values(ledSnap.val()) : [];
+  entries.sort((a,b)=>b.ts-a.ts);
+  const flagged = entries.filter(e => e.flagged);
+  if(flagged.length){
+    alertMsgs.push(`${flagged.length} suspicious payout${flagged.length>1?"s":""} flagged below (larger than any legitimate prize).`);
+  }
+  // burn-rate check: lots of payouts in the last 2 minutes
+  const recent = entries.filter(e => Date.now()-e.ts < 120000);
+  if(recent.length >= 15){
+    alertMsgs.push(`Unusual activity: ${recent.length} payouts in the last 2 minutes.`);
+  }
+
+  if(alertMsgs.length){
+    alert.classList.remove("hidden");
+    alert.innerHTML = alertMsgs.map(m=>`<div>⚠ ${escapeHtml(m)}</div>`).join("");
+  } else {
+    alert.classList.add("hidden");
+  }
+
+  // render ledger feed (latest 40)
+  const led = document.getElementById("admin-ledger");
+  if(entries.length === 0){
+    led.innerHTML = `<p class="muted" style="font-size:13px;">No payouts yet.</p>`;
+  } else {
+    led.innerHTML = entries.slice(0,40).map(e => {
+      const t = new Date(e.ts);
+      const time = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+      return `<div class="ledger-row${e.flagged?' flagged':''}">
+        <span class="led-who">@${escapeHtml(e.toHandle||"?")}</span>
+        <span class="led-reason">${escapeHtml(e.reason||"")}</span>
+        <span class="led-amt">+${formatStake(e.amount)}</span>
+        <span class="led-time">${time}</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+document.getElementById("topup-amount").addEventListener("input",(e)=>{ e.target.value=e.target.value.replace(/[^0-9]/g,""); });
+document.getElementById("btn-topup").addEventListener("click", async () => {
+  if(!isAdmin) return;
+  const amount = parseInt(document.getElementById("topup-amount").value,10)||0;
+  const status = document.getElementById("topup-status");
+  if(amount <= 0){ status.textContent = "Enter an amount."; return; }
+  status.style.color = ""; status.textContent = "Moving chips cold → hot…";
+  try{
+    // move from cold bank to hot wallet (admin-only; you are signed in as the bank)
+    const res = await runTransaction(ref(db, `users/${ADMIN_UID}/balance`), (b) => {
+      const cur = b||0; if(cur < amount) return; return cur - amount;
+    });
+    if(!res.committed || res.snapshot.val() === null){ status.style.color="var(--clay)"; status.textContent="Cold bank can't cover that."; return; }
+    await runTransaction(ref(db, `hotWallet/balance`), (b)=> (b||0)+amount);
+    status.style.color = "var(--sage)";
+    status.textContent = `Moved ${formatStake(amount)} to the hot wallet.`;
+    document.getElementById("topup-amount").value = "";
+    renderAdmin();
+  } catch(e){ status.style.color="var(--clay)"; status.textContent="Top-up failed."; }
+});
+
+document.getElementById("admin-amount").addEventListener("input",(e)=>{ e.target.value=e.target.value.replace(/[^0-9]/g,""); });
+document.getElementById("admin-handle").addEventListener("input",(e)=>{ e.target.value=e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16); });
+document.getElementById("btn-admin-send").addEventListener("click", async () => {
+  if(!isAdmin) return;
+  const handle = normalizeHandle(document.getElementById("admin-handle").value);
+  const amount = parseInt(document.getElementById("admin-amount").value,10)||0;
+  const status = document.getElementById("admin-status");
+  if(handle.length<3 || amount<=0){ status.textContent = "Enter a handle and a positive amount."; return; }
+  const hsnap = await get(ref(db, `handles/${handle}`));
+  if(!hsnap.exists()){ status.textContent = "No player with that handle."; return; }
+  const targetUid = hsnap.val();
+  status.textContent = "Sending…";
+  try{
+    // admin direct-send comes from the COLD bank (you're signed in as the bank)
+    const res = await runTransaction(ref(db, `users/${ADMIN_UID}/balance`), (b)=>{
+      const cur=b||0; if(cur<amount) return; return cur-amount;
+    });
+    if(!res.committed || res.snapshot.val()===null){ status.style.color="var(--clay)"; status.textContent="Cold bank can't cover that."; return; }
+    await runTransaction(ref(db, `users/${targetUid}/balance`), (b)=> (b||0)+amount);
+    await logLedger({ toUid: targetUid, amount, reason: "admin-send" });
+    status.style.color = "var(--sage)";
+    status.textContent = `Sent ${formatStake(amount)} chips to @${handle}.`;
+    document.getElementById("admin-amount").value = "";
+    renderAdmin();
+  } catch(e){
+    status.style.color = "var(--clay)";
+    status.textContent = "Send failed — check the security rules are published.";
+  }
+});
+
+let selectedMode = "same";
+document.getElementById("mode-same").addEventListener("click", () => setMode("same"));
+document.getElementById("mode-remote").addEventListener("click", () => setMode("remote"));
+function setMode(m){
+  selectedMode = m;
+  document.getElementById("mode-same").classList.toggle("active", m === "same");
+  document.getElementById("mode-remote").classList.toggle("active", m === "remote");
+  document.getElementById("mode-explainer").textContent = m === "same"
+    ? "One of you holds the phone for the opening question."
+    : "The app picks who starts and tells everyone automatically.";
+}
+
+let stakesEnabled = false;
+document.getElementById("stakes-off").addEventListener("click", () => setStakesMode(false));
+document.getElementById("stakes-on").addEventListener("click", () => {
+  // playing for chips requires a verified, signed-in account
+  if(!currentUser || !myAccount){
+    openAuth("create");
+    return;
+  }
+  if(!myAccount.verified){
+    document.getElementById("stakes-signin-note").textContent =
+      "Verify your email first (check your inbox) to play for chips.";
+    return;
+  }
+  setStakesMode(true);
+});
+function setStakesMode(on){
+  stakesEnabled = on;
+  document.getElementById("stakes-off").classList.toggle("active", !on);
+  document.getElementById("stakes-on").classList.toggle("active", on);
+  document.getElementById("stakes-fields").classList.toggle("hidden", !on);
+  const note = document.getElementById("stakes-signin-note");
+  if(on && myAccount) note.textContent = `Your balance: ${formatStake(myAccount.balance||0)} chips.`;
+  else if(!on) note.textContent = "";
+}
+document.getElementById("stake-amount").addEventListener("input", (e) => {
+  e.target.value = e.target.value.replace(/[^0-9]/g,"");
+});
+
+document.getElementById("btn-create-confirm").addEventListener("click", async () => {
+  const name = document.getElementById("create-name").value.trim();
+  if(!name){ flashInvalid("create-name"); return; }
+
+  let stakePerDie = 0;
+  if(stakesEnabled){
+    if(!currentUser || !myAccount || !myAccount.verified){ openAuth("create"); return; }
+    stakePerDie = parseInt(document.getElementById("stake-amount").value, 10) || 0;
+    if(stakePerDie <= 0){ flashInvalid("stake-amount"); return; }
+    // ensure the host can cover the worst-case loss (stake * starting dice)
+    const maxLoss = stakePerDie * STARTING_DICE;
+    if((myAccount.balance||0) < maxLoss){
+      document.getElementById("stakes-signin-note").textContent =
+        `You need at least ${formatStake(maxLoss)} chips to host this stake. You have ${formatStake(myAccount.balance||0)}.`;
+      return;
+    }
+  }
+
+  myName = name;
+  const code = await generateUniqueCode();
+  roomCode = code;
+
+  const playerData = {
+    name, seat:0, diceCount: STARTING_DICE, dice: null,
+    connected:true, eliminated:false,
+    uid: currentUser ? currentUser.uid : null,
+    handle: myAccount ? myAccount.handle : null,
+    avatar: myAccount ? (myAccount.avatar || "a1") : "a1"
+  };
+
+  await set(ref(db, `rooms/${code}`), {
+    code, mode: selectedMode, phase: "lobby",
+    hostId: myPlayerId,
+    createdAt: serverTimestamp(),
+    // Chips economy: stakePerDie is in account chips. Settlement at game end
+    // moves real /users/{uid}/balance from each loser to the winner, rule-enforced.
+    stakesEnabled, stakePerDie,
+    players: { [myPlayerId]: playerData },
+    turnOrder: [myPlayerId],
+    direction: 1,
+    currentTurnPlayerId: null,
+    currentBid: null,
+    bidHistory: [],
+    round: 0,
+    funnyQuestion: null,
+    lastReveal: null,
+    winnerPlayerId: null,
+    settled: false
+  });
+
+  setupPresence(code, myPlayerId);
+  subscribeRoom(code);
+  showScreen("lobby");
+});
+
+async function generateUniqueCode(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+  for(let attempt=0; attempt<25; attempt++){
+    let code = "";
+    for(let i=0;i<4;i++) code += chars[Math.floor(Math.random()*chars.length)];
+    const snap = await get(ref(db, `rooms/${code}`));
+    if(!snap.exists()) return code;
+  }
+  throw new Error("Could not generate a free room code, try again.");
+}
+
+// ===================== JOIN FLOW =====================
+document.getElementById("join-code").addEventListener("input", (e) => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
+});
+
+document.getElementById("btn-join-confirm").addEventListener("click", async () => {
+  const code = document.getElementById("join-code").value.trim().toUpperCase();
+  const name = document.getElementById("join-name").value.trim();
+  const errEl = document.getElementById("join-error");
+  errEl.style.display = "none";
+
+  if(code.length !== 4){ errEl.textContent = "Room codes are 4 characters."; errEl.style.display="block"; return; }
+  if(!name){ flashInvalid("join-name"); return; }
+
+  const roomRef = ref(db, `rooms/${code}`);
+  const snap = await get(roomRef);
+  if(!snap.exists()){ errEl.textContent = "No table with that code."; errEl.style.display="block"; return; }
+
+  const room = snap.val();
+
+  // Rejoin case: same name already present and this device's stored pid matches a seat
+  const existing = room.players && room.players[myPlayerId];
+  if(existing){
+    myName = existing.name;
+    roomCode = code;
+    setupPresence(code, myPlayerId);
+    subscribeRoom(code);
+    showScreen(room.phase === "lobby" ? "lobby" : "table");
+    return;
+  }
+
+  if(room.phase !== "lobby"){
+    errEl.textContent = "This game already started — ask the host to add you before kickoff.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  const currentPlayers = room.players || {};
+  const count = Object.keys(currentPlayers).length;
+  if(count >= MAX_PLAYERS){
+    errEl.textContent = "Table's full (10 players max).";
+    errEl.style.display = "block";
+    return;
+  }
+
+  // stakes game? require a verified account with enough chips
+  if(room.stakesEnabled){
+    if(!currentUser || !myAccount || !myAccount.verified){
+      errEl.textContent = "This is a chips table — sign in and verify your email to join.";
+      errEl.style.display = "block";
+      setTimeout(()=>openAuth("join"), 900);
+      return;
+    }
+    const maxLoss = (room.stakePerDie||0) * STARTING_DICE;
+    if((myAccount.balance||0) < maxLoss){
+      errEl.textContent = `You need ${formatStake(maxLoss)} chips to sit at this table. You have ${formatStake(myAccount.balance||0)}.`;
+      errEl.style.display = "block";
+      return;
+    }
+  }
+
+  myName = name;
+  roomCode = code;
+
+  await update(ref(db, `rooms/${code}/players/${myPlayerId}`), {
+    name, seat: count, diceCount: STARTING_DICE, dice: null,
+    connected: true, eliminated: false,
+    uid: currentUser ? currentUser.uid : null,
+    handle: myAccount ? myAccount.handle : null,
+    avatar: myAccount ? (myAccount.avatar || "a1") : "a1"
+  });
+
+  // append to turnOrder array safely via transaction
+  await runTransaction(ref(db, `rooms/${code}/turnOrder`), (order) => {
+    order = order || [];
+    if(!order.includes(myPlayerId)) order.push(myPlayerId);
+    return order;
+  });
+
+  setupPresence(code, myPlayerId);
+  subscribeRoom(code);
+  showScreen("lobby");
+});
+
+function flashInvalid(id){
+  const el = document.getElementById(id);
+  el.style.borderColor = "var(--red)";
+  setTimeout(() => el.style.borderColor = "", 900);
+}
+
+// ===================== PRESENCE =====================
+function setupPresence(code, pid){
+  const connRef = ref(db, `rooms/${code}/players/${pid}/connected`);
+  set(connRef, true);
+  onDisconnect(connRef).set(false);
+}
+
+// ===================== LEAVE LOBBY =====================
+document.getElementById("btn-leave-lobby").addEventListener("click", async () => {
+  if(unsubRoom) unsubRoom();
+  if(roomCode && myPlayerId){
+    await update(ref(db, `rooms/${roomCode}/players/${myPlayerId}`), { connected:false });
+  }
+  roomCode = null;
+  showScreen("landing");
+});
+
+// ===================== SUBSCRIBE / RENDER ROUTER =====================
+function subscribeRoom(code){
+  if(unsubRoom) unsubRoom();
+  unsubRoom = onValue(ref(db, `rooms/${code}`), (snap) => {
+    if(!snap.exists()) return;
+    const room = snap.val();
+    lastRoomSnapshot = room;
+    renderRoom(room);
+  });
+}
+
+function renderRoom(room){
+  document.getElementById("lobby-code").textContent = room.code;
+  document.getElementById("lobby-mode-label").textContent = room.mode === "same" ? "SAME ROOM" : "REMOTE";
+  document.getElementById("hud-code").textContent = room.code;
+
+  const stakesEl = document.getElementById("lobby-stakes-display");
+  if(room.stakesEnabled){
+    stakesEl.textContent = `Playing for ${formatStake(room.stakePerDie)} ${room.stakeCurrency} per die left`;
+  } else {
+    stakesEl.textContent = "Just for fun — no stake set";
+  }
+
+  renderLobbyRoster(room);
+
+  const amIHost = room.hostId === myPlayerId;
+  const playerCount = Object.keys(room.players || {}).length;
+  const startBtn = document.getElementById("btn-start-game");
+  startBtn.classList.toggle("hidden", !amIHost);
+  startBtn.disabled = playerCount < MIN_PLAYERS;
+  startBtn.textContent = playerCount < MIN_PLAYERS
+    ? `Need ${MIN_PLAYERS - playerCount} more player${MIN_PLAYERS - playerCount===1?"":"s"}`
+    : "Start game";
+
+  const botZone = document.getElementById("bot-add-zone");
+  botZone.style.display = (amIHost && room.phase === "lobby" && playerCount < MAX_PLAYERS) ? "block" : "none";
+
+  if(room.phase === "lobby" && document.getElementById("screen-table").classList.contains("hidden") === false){
+    // someone reset; ignore
+  }
+
+  if(room.phase === "lobby"){
+    if(!document.getElementById("screen-create").classList.contains("hidden")) return;
+    if(!document.getElementById("screen-join").classList.contains("hidden")) return;
+    showScreen("lobby");
+  } else if(room.phase === "funny"){
+    renderFunnyQuestion(room);
+    showScreen("funny");
+  } else if(room.phase === "playing"){
+    showScreen("table");
+    renderTable(room);
+    renderChat(room);
+    maybeDriveBotTurn(room);
+  } else if(room.phase === "roundover"){
+    showScreen("table");
+    renderTable(room);
+    renderChat(room);
+    renderRoundOver(room);
+    maybeAdvanceRound(room);
+  } else if(room.phase === "ended"){
+    renderEndScreen(room);
+    showScreen("end");
+  }
+}
+
+function renderLobbyRoster(room){
+  const el = document.getElementById("lobby-roster");
+  const players = room.players || {};
+  const order = room.turnOrder && room.turnOrder.length ? room.turnOrder : Object.keys(players);
+  const amIHost = room.hostId === myPlayerId;
+  el.innerHTML = "";
+  order.forEach(pid => {
+    const p = players[pid];
+    if(!p) return;
+    const row = document.createElement("div");
+    row.className = "roster-row";
+    const botTag = p.isBot ? ` &middot; bot &middot; ${DIFFICULTY_LABELS[p.botDifficulty]||""}` : "";
+    let rightSide = pid===myPlayerId ? "you" : (p.isBot ? "" : (p.connected ? "" : "offline"));
+    let removeBtn = "";
+    if(amIHost && p.isBot && room.phase === "lobby"){
+      removeBtn = `<button type="button" class="cup-toggle" data-remove-bot="${pid}" style="margin-left:8px;">remove</button>`;
+    }
+    row.innerHTML = `<span class="nm">${escapeHtml(p.name)}${pid===room.hostId ? " &middot; host" : ""}${botTag}</span>
+                      <span class="tag" style="display:flex; align-items:center;">${rightSide}${removeBtn}</span>`;
+    el.appendChild(row);
+  });
+  if(order.length === 0){
+    el.innerHTML = `<div class="empty-state">Waiting for the first player&hellip;</div>`;
+  }
+  el.querySelectorAll("[data-remove-bot]").forEach(btn => {
+    btn.addEventListener("click", () => removeBot(btn.dataset.removeBot));
+  });
+}
+
+const DIFFICULTY_LABELS = { noob:"Noob", average:"Average", serious:"Serious", godlike:"Godlike" };
+
+async function removeBot(botPid){
+  const room = lastRoomSnapshot;
+  if(!room) return;
+  const newOrder = room.turnOrder.filter(pid => pid !== botPid);
+  const updates = {};
+  updates[`players/${botPid}`] = null;
+  updates["turnOrder"] = newOrder;
+  await update(ref(db, `rooms/${roomCode}`), updates);
+}
+
+// ===================== ADD BOT (lobby) =====================
+let selectedBotDifficulty = "noob";
+document.querySelectorAll("#bot-difficulty-grid .face-opt").forEach(btn => {
+  btn.addEventListener("click", () => {
+    selectedBotDifficulty = btn.dataset.diff;
+    document.querySelectorAll("#bot-difficulty-grid .face-opt").forEach(b => b.classList.toggle("active", b===btn));
+  });
+});
+
+const BOT_NAME_POOL = ["Razor","Vex","Cricket","Domino","Hazel","Tusk","Nudge","Wren","Bishop","Marlowe"];
+
+document.getElementById("btn-add-bot").addEventListener("click", async () => {
+  const room = lastRoomSnapshot;
+  if(!room) return;
+  const order = room.turnOrder || [];
+  if(order.length >= MAX_PLAYERS) return;
+
+  const usedNames = new Set(Object.values(room.players||{}).map(p=>p.name));
+  const freeName = BOT_NAME_POOL.find(n => !usedNames.has(n)) || ("Bot " + (order.length+1));
+
+  const botId = "bot_" + Math.random().toString(36).slice(2,9);
+  const botData = {
+    name: freeName, seat: order.length, diceCount: STARTING_DICE, dice: null,
+    connected: true, eliminated: false, isBot: true, botDifficulty: selectedBotDifficulty,
+    avatar: AVATARS[Math.floor(Math.random()*AVATARS.length)].id
+  };
+
+  await update(ref(db, `rooms/${roomCode}/players/${botId}`), botData);
+  await runTransaction(ref(db, `rooms/${roomCode}/turnOrder`), (ord) => {
+    ord = ord || [];
+    if(!ord.includes(botId)) ord.push(botId);
+    return ord;
+  });
+});
+
+// ===================== START GAME (host action) =====================
+document.getElementById("btn-start-game").addEventListener("click", async () => {
+  const room = lastRoomSnapshot;
+  if(!room) return;
+  const order = room.turnOrder.slice();
+
+  // deal dice to everyone
+  const updates = {};
+  order.forEach(pid => {
+    updates[`players/${pid}/diceCount`] = STARTING_DICE;
+    updates[`players/${pid}/eliminated`] = false;
+    updates[`players/${pid}/dice`] = rollDice(STARTING_DICE);
+  });
+
+  if(room.mode === "same"){
+    const q = FUNNY_QUESTIONS[Math.floor(Math.random()*FUNNY_QUESTIONS.length)];
+    updates["funnyQuestion"] = { text: q.text, resolved:false, chosenPlayerId:null, autoPicked:false };
+    updates["phase"] = "funny";
+  } else {
+    const starter = order[Math.floor(Math.random()*order.length)];
+    updates["funnyQuestion"] = { text:"", resolved:true, chosenPlayerId: starter, autoPicked:true };
+    updates["phase"] = "funny";
+  }
+  updates["round"] = 1;
+  updates["direction"] = 1;
+  updates["currentBid"] = null;
+  updates["bidHistory"] = [];
+  updates["lastReveal"] = null;
+
+  await update(ref(db, `rooms/${roomCode}`), updates);
+});
+
+// ===================== FUNNY QUESTION SCREEN =====================
+function renderFunnyQuestion(room){
+  const qEl = document.getElementById("fq-question");
+  const bodyEl = document.getElementById("fq-body");
+  const amIHost = room.hostId === myPlayerId;
+
+  if(room.mode === "remote" || room.funnyQuestion.autoPicked){
+    const starter = room.players[room.funnyQuestion.chosenPlayerId];
+    qEl.textContent = "The dice have chosen.";
+    bodyEl.innerHTML = `<p style="font-size:18px; margin-top:6px;"><b style="color:var(--gold)">${escapeHtml(starter ? starter.name : "Someone")}</b> starts the first round.</p>`;
+    if(amIHost){
+      bodyEl.innerHTML += `<button class="btn-primary" id="fq-continue" style="margin-top:24px;">Begin round 1</button>`;
+      setTimeout(() => {
+        const b = document.getElementById("fq-continue");
+        if(b) b.addEventListener("click", () => beginRoundOne(room.funnyQuestion.chosenPlayerId));
+      }, 0);
+    } else {
+      bodyEl.innerHTML += `<p class="muted" style="margin-top:16px;">Waiting for host to begin&hellip;</p>`;
+    }
+    return;
+  }
+
+  // same-room mode: host taps which player it applies to
+  qEl.textContent = room.funnyQuestion.text;
+  if(room.funnyQuestion.resolved){
+    const chosen = room.players[room.funnyQuestion.chosenPlayerId];
+    bodyEl.innerHTML = `<p style="font-size:18px;">It's <b style="color:var(--gold)">${escapeHtml(chosen?chosen.name:"")}</b>. They start.</p>`;
+    if(amIHost){
+      bodyEl.innerHTML += `<button class="btn-primary" id="fq-continue" style="margin-top:20px;">Begin round 1</button>`;
+      setTimeout(() => {
+        const b = document.getElementById("fq-continue");
+        if(b) b.addEventListener("click", () => beginRoundOne(room.funnyQuestion.chosenPlayerId));
+      }, 0);
+    } else {
+      bodyEl.innerHTML += `<p class="muted" style="margin-top:16px;">Waiting for host to begin&hellip;</p>`;
+    }
+  } else if(amIHost){
+    const order = room.turnOrder;
+    let html = `<div class="fq-options">`;
+    order.forEach(pid => {
+      const p = room.players[pid];
+      html += `<button class="fq-opt" data-pid="${pid}">${escapeHtml(p.name)}</button>`;
+    });
+    html += `</div>`;
+    bodyEl.innerHTML = html;
+    bodyEl.querySelectorAll(".fq-opt").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await update(ref(db, `rooms/${roomCode}/funnyQuestion`), {
+          resolved:true, chosenPlayerId: btn.dataset.pid
+        });
+      });
+    });
+  } else {
+    bodyEl.innerHTML = `<p class="muted" style="margin-top:10px;">Waiting for the host to pick&hellip;</p>`;
+  }
+}
+
+async function beginRoundOne(starterPid){
+  await update(ref(db, `rooms/${roomCode}`), {
+    phase: "playing",
+    currentTurnPlayerId: starterPid
+  });
+}
+
+function rollDice(n){
+  const dice = [];
+  for(let i=0;i<n;i++) dice.push(FACES[Math.floor(Math.random()*FACES.length)]);
+  return dice;
+}
+
+// ===================== CHAT =====================
+let chatOpen = false;
+let chatLastSeenCount = 0;
+
+document.getElementById("chat-header").addEventListener("click", () => {
+  chatOpen = !chatOpen;
+  const panel = document.getElementById("chat-panel");
+  panel.classList.toggle("collapsed", !chatOpen);
+  document.getElementById("chat-chevron").textContent = chatOpen ? "close" : "tap";
+  if(chatOpen){
+    chatLastSeenCount = (lastRoomSnapshot?.chat ? Object.keys(lastRoomSnapshot.chat).length : 0);
+    updateChatBadge(0);
+    const msgs = document.getElementById("chat-messages");
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+});
+
+async function sendChat(){
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim();
+  if(!text || !roomCode) return;
+  const who = (myAccount && myAccount.handle) ? "@"+myAccount.handle : (myName || "player");
+  await runTransaction(ref(db, `rooms/${roomCode}/chat`), (chat) => {
+    chat = chat || {};
+    const id = "m_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
+    chat[id] = { who, text: text.slice(0,160), ts: Date.now() };
+    return chat;
+  });
+  input.value = "";
+}
+document.getElementById("chat-send").addEventListener("click", sendChat);
+document.getElementById("chat-input").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") sendChat();
+});
+
+function renderChat(room){
+  const panel = document.getElementById("chat-panel");
+  // chat only on the table / roundover screens
+  const onTable = room && (room.phase === "playing" || room.phase === "roundover");
+  panel.classList.toggle("hidden", !onTable);
+  if(!onTable) return;
+
+  const msgs = document.getElementById("chat-messages");
+  const chat = room.chat || {};
+  const entries = Object.values(chat).sort((a,b)=>a.ts-b.ts);
+  msgs.innerHTML = entries.map(m =>
+    m.system
+      ? `<div class="chat-msg system">${escapeHtml(m.text)}</div>`
+      : `<div class="chat-msg"><span class="who">${escapeHtml(m.who)}:</span> ${escapeHtml(m.text)}</div>`
+  ).join("");
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // unread badge when collapsed
+  if(!chatOpen){
+    const unread = entries.length - chatLastSeenCount;
+    updateChatBadge(Math.max(0, unread));
+  } else {
+    chatLastSeenCount = entries.length;
+  }
+}
+
+function updateChatBadge(n){
+  const badge = document.getElementById("chat-badge");
+  if(n > 0){ badge.textContent = n; badge.classList.remove("hidden"); }
+  else badge.classList.add("hidden");
+}
+
+// ===================== TABLE RENDER =====================
+function renderTable(room){
+  document.getElementById("hud-round").textContent = `Round ${room.round}`;
+
+  const me = room.players[myPlayerId];
+  if(!me) return;
+
+  // stake banner (money games only)
+  let banner = document.getElementById("stake-banner");
+  if(room.stakesEnabled){
+    if(!banner){
+      banner = document.createElement("div");
+      banner.id = "stake-banner"; banner.className = "stake-banner";
+      const hud = document.querySelector("#screen-table .hud");
+      hud.parentNode.insertBefore(banner, hud.nextSibling);
+    }
+    banner.textContent = `● ${formatStake(room.stakePerDie)} chips per die — winner takes all`;
+    banner.classList.remove("hidden");
+  } else if(banner){
+    banner.classList.add("hidden");
+  }
+
+  // seats arranged around the felt table rim
+  const seatsEl = document.getElementById("seats");
+  seatsEl.innerHTML = "";
+  const order = room.turnOrder.filter(pid => room.players[pid]);
+  // rotate so the local player sits at the bottom-center
+  const meIdx = order.indexOf(myPlayerId);
+  const rotated = meIdx >= 0 ? order.slice(meIdx).concat(order.slice(0,meIdx)) : order;
+  const n = rotated.length;
+  const justRolled = room.round !== lastRolledRound;
+
+  rotated.forEach((pid, i) => {
+    const p = room.players[pid];
+    if(!p) return;
+    // angle: index 0 (me) at bottom (90deg), going clockwise around the ellipse
+    const angle = (Math.PI/2) + (i / n) * 2 * Math.PI;
+    const rx = 50, ry = 46;            // ellipse radius in %
+    const cx = 50 + rx * Math.cos(angle);
+    const cy = 50 + ry * Math.sin(angle);
+    const seat = document.createElement("div");
+    seat.className = "seat"
+      + (pid===room.currentTurnPlayerId ? " is-turn":"")
+      + (p.eliminated ? " is-out":"");
+    seat.style.left = cx + "%";
+    seat.style.top  = cy + "%";
+    seat.innerHTML = `
+      ${pid===myPlayerId ? '<span class="seat-you">YOU</span>' : ''}
+      ${avatarHTML(p.avatar || 'a1', 30)}
+      <div class="cup ${p.eliminated?'empty':''} ${justRolled && !p.eliminated ? 'rolling':''}">
+        <span class="cup-count">${p.eliminated ? '✕' : p.diceCount}</span>
+      </div>
+      <div class="seat-name">${escapeHtml(p.name)}</div>
+      ${room.stakesEnabled && p.handle ? `<div class="seat-stack">@${escapeHtml(p.handle)}</div>` : ''}
+    `;
+    if(justRolled && !p.eliminated){
+      seat.querySelector(".cup").style.animationDelay = (i*0.05) + "s";
+    }
+    seatsEl.appendChild(seat);
+  });
+
+  // current bid display
+  const bidEl = document.getElementById("current-bid-display");
+  if(room.currentBid){
+    const byP = room.players[room.currentBid.byPlayerId];
+    bidEl.classList.remove("empty");
+    bidEl.innerHTML = `
+      <div class="by">${escapeHtml(byP?byP.name:"")} claims</div>
+      <div class="claim">${room.currentBid.quantity} &times; <span class="face">${room.currentBid.face}</span>${room.currentBid.face!==WILD_FACE ? '<span style="font-size:14px; color:var(--cream-dim);"> or Aces</span>':''}</div>
+    `;
+  } else {
+    bidEl.classList.add("empty");
+    bidEl.innerHTML = `<div class="claim">No claim yet — opening bid</div>`;
+  }
+
+  // your dice
+  renderYourDice(me, room);
+
+  // money tools (stakes games): send chips / ask the table
+  renderMoneyTools(room, me);
+
+  // action zone
+  renderActionZone(room, me);
+}
+
+// Toolbar shown on stakes tables: transfer chips to a player, or (if broke) ask the table.
+function renderMoneyTools(room, me){
+  let bar = document.getElementById("money-tools");
+  if(!room.stakesEnabled || !me.uid){
+    if(bar) bar.remove();
+    return;
+  }
+  if(!bar){
+    bar = document.createElement("div");
+    bar.id = "money-tools";
+    bar.className = "money-tools";
+    const dice = document.querySelector("#screen-table .your-dice");
+    dice.parentNode.insertBefore(bar, dice.nextSibling);
+  }
+  const myBal = myAccount ? (myAccount.balance||0) : 0;
+  const broke = myBal <= 0;
+  bar.innerHTML = `
+    <button class="money-tool-btn" id="mt-send">Send chips</button>
+    ${broke && !askedTableThisSession ? `<button class="money-tool-btn alt" id="mt-ask">Ask the table</button>` : ''}
+  `;
+  const send = document.getElementById("mt-send");
+  if(send) send.addEventListener("click", () => openTransferModal(room));
+  const ask = document.getElementById("mt-ask");
+  if(ask) ask.addEventListener("click", () => askTheTable(room));
+}
+
+// ---- transfer modal ----
+function openTransferModal(room){
+  const others = room.turnOrder
+    .map(pid => room.players[pid])
+    .filter(p => p && p.uid && p.handle && p.uid !== (currentUser&&currentUser.uid));
+  if(others.length === 0){ toast("No other account-holders at this table."); return; }
+
+  const ov = document.getElementById("modal-layer");
+  ov.classList.remove("hidden");
+  ov.innerHTML = `
+    <div class="modal-card">
+      <p class="eyebrow" style="margin-bottom:10px;">Send chips</p>
+      <div class="field"><label>To</label>
+        <select id="xfer-to" class="modal-select">
+          ${others.map(p=>`<option value="${p.uid}">@${escapeHtml(p.handle)}</option>`).join("")}
+        </select></div>
+      <div class="field"><label>Amount (1–${TRANSFER_MAX})</label>
+        <input type="text" class="name-input" id="xfer-amt" inputmode="numeric" placeholder="5"></div>
+      <p class="muted" id="xfer-status" style="font-size:12px;margin-bottom:12px;">Your balance: ${formatStake(myAccount?.balance||0)} chips</p>
+      <div class="btn-row">
+        <button class="btn-secondary" id="xfer-cancel">Cancel</button>
+        <button class="btn-primary" id="xfer-go">Send</button>
+      </div>
+    </div>`;
+  document.getElementById("xfer-amt").addEventListener("input",(e)=>{ e.target.value=e.target.value.replace(/[^0-9]/g,""); });
+  document.getElementById("xfer-cancel").addEventListener("click", closeModal);
+  document.getElementById("xfer-go").addEventListener("click", async () => {
+    const toUid = document.getElementById("xfer-to").value;
+    const amt = parseInt(document.getElementById("xfer-amt").value,10)||0;
+    const status = document.getElementById("xfer-status");
+    if(amt < TRANSFER_MIN || amt > TRANSFER_MAX){ status.textContent = `Enter 1–${TRANSFER_MAX} chips.`; return; }
+    if((myAccount?.balance||0) < amt){ status.textContent = "Not enough chips."; return; }
+    status.textContent = "Sending…";
+    try{
+      await runTransaction(ref(db, `users/${currentUser.uid}/balance`), (b)=> Math.max(0,(b||0)-amt));
+      await runTransaction(ref(db, `users/${toUid}/balance`), (b)=> (b||0)+amt);
+      closeModal(); toast(`Sent ${amt} chips.`);
+    }catch{ status.textContent = "Send failed."; }
+  });
+}
+
+// ---- ask the table (once per session) ----
+async function askTheTable(room){
+  if(askedTableThisSession) return;
+  askedTableThisSession = true;
+  const handle = myAccount ? myAccount.handle : myName;
+  await runTransaction(ref(db, `rooms/${roomCode}/chat`), (chat) => {
+    chat = chat || {};
+    const id = "m_" + Date.now() + "_ask";
+    chat[id] = { who: "table", text: `@${handle} is out of chips and is asking the table for a small hand-up (1–${ASK_TABLE_MAX}). Tap Send chips if you'd like to help.`, ts: Date.now(), system: true };
+    return chat;
+  });
+  toast("Asked the table. Others can choose to send you chips.");
+  if(lastRoomSnapshot) renderMoneyTools(lastRoomSnapshot, lastRoomSnapshot.players[myPlayerId]);
+}
+
+function closeModal(){ document.getElementById("modal-layer").classList.add("hidden"); }
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.add("hidden"), 2600);
+}
+
+// builds the inner markup for a single card-faced die
+function dieFaceHTML(face){
+  return `<div class="die-inner">
+            <span class="corner tl">${face}</span>
+            <span class="pip">${face}</span>
+            <span class="corner br">${face}</span>
+          </div>`;
+}
+
+let lastRolledRound = 0;
+function renderYourDice(me, room){
+  const row = document.getElementById("your-dice-row");
+  row.innerHTML = "";
+  const dice = me.dice || [];
+  // animate the roll once per new round
+  const justRolled = room && room.round !== lastRolledRound;
+  if(room) lastRolledRound = room.round;
+
+  dice.forEach((face, i) => {
+    const die = document.createElement("div");
+    die.className = "die " + rankClass(face) + (cupRevealed ? "" : " covered") + (justRolled ? " rolling":"");
+    die.innerHTML = dieFaceHTML(face);
+    if(justRolled){
+      die.querySelector(".die-inner").style.animationDelay = (i*0.06) + "s";
+    }
+    row.appendChild(die);
+  });
+  const toggle = document.getElementById("cup-toggle");
+  toggle.textContent = cupRevealed ? "Cover cup" : "Tap to reveal";
+  toggle.classList.toggle("revealed", cupRevealed);
+}
+
+document.getElementById("cup-toggle").addEventListener("click", () => {
+  cupRevealed = !cupRevealed;
+  if(lastRoomSnapshot){
+    const me = lastRoomSnapshot.players[myPlayerId];
+    // pass a room-like object whose round matches lastRolledRound so toggling
+    // reveal/cover does NOT re-trigger the roll animation
+    if(me) renderYourDice(me, { round: lastRolledRound });
+  }
+});
+
+function renderActionZone(room, me){
+  const zone = document.getElementById("action-zone");
+  zone.innerHTML = "";
+
+  if(me.eliminated){
+    zone.innerHTML = `<div class="waiting-banner">You're out of dice — watching the rest of the table.</div>`;
+    return;
+  }
+
+  const isMyTurn = room.currentTurnPlayerId === myPlayerId;
+  if(!isMyTurn){
+    const turnPlayer = room.players[room.currentTurnPlayerId];
+    zone.innerHTML = `<div class="waiting-banner">Waiting on <b>${escapeHtml(turnPlayer?turnPlayer.name:"")}</b>&hellip;</div>`;
+    return;
+  }
+
+  // It's my turn: build bid picker + (optional) challenge button
+  const totalDiceOnTable = Object.values(room.players).reduce((s,p)=>s + (p.eliminated?0:p.diceCount), 0);
+  const bid = room.currentBid;
+
+  const wrap = document.createElement("div");
+
+  if(bid){
+    const challengeBtn = document.createElement("button");
+    challengeBtn.className = "btn-danger";
+    challengeBtn.textContent = `Call "Liar!" on ${room.players[bid.byPlayerId].name}`;
+    challengeBtn.addEventListener("click", () => submitChallenge(room));
+    wrap.appendChild(challengeBtn);
+  }
+
+  const picker = buildBidPicker(bid, totalDiceOnTable);
+  wrap.appendChild(picker);
+
+  zone.appendChild(wrap);
+}
+
+// Is {quantity, face} a legal raise over the current bid?
+// Rule: EITHER same quantity + strictly higher face, OR strictly higher quantity + any face.
+// You may always bid a face you don't actually hold — bluffing is allowed.
+function isLegalRaise(bid, quantity, faceIdx){
+  if(!bid) return quantity >= 1;            // opening bid: any qty>=1, any face
+  const bidFaceIdx = FACES.indexOf(bid.face);
+  if(quantity > bid.quantity) return true;  // higher quantity, any face
+  if(quantity === bid.quantity && faceIdx > bidFaceIdx) return true; // same qty, higher face
+  return false;
+}
+
+function buildBidPicker(bid, totalDiceOnTable){
+  const container = document.createElement("div");
+  container.className = "bid-picker";
+
+  // Hard ceiling: you can never claim more dice than exist on the table.
+  const absoluteMaxQty = Math.max(1, totalDiceOnTable);
+
+  // Default selection = cheapest legal raise.
+  let qty, faceIdx;
+  if(!bid){
+    qty = 1; faceIdx = 0;
+  } else {
+    const bidFaceIdx = FACES.indexOf(bid.face);
+    if(bidFaceIdx < FACES.length - 1){
+      // cheapest raise is same quantity, next face up
+      qty = bid.quantity; faceIdx = bidFaceIdx + 1;
+    } else {
+      // bid was on the highest face (Ace) — only way up is more quantity
+      qty = Math.min(bid.quantity + 1, absoluteMaxQty); faceIdx = 0;
+    }
+  }
+
+  // Visible quantity range: from the lowest quantity that could ever be legal,
+  // up to a usable headroom cap (keeps the stepper sane at high player counts).
+  const minQtyFloor = bid ? bid.quantity : 1;
+  const maxQty = Math.min(absoluteMaxQty, Math.max(qty, minQtyFloor) + 8);
+
+  container.innerHTML = `
+    <div class="picker-row">
+      <label>How many</label>
+      <div class="stepper">
+        <button type="button" id="qty-minus">&minus;</button>
+        <span class="val" id="qty-val">${qty}</span>
+        <button type="button" id="qty-plus">+</button>
+      </div>
+    </div>
+    <div class="picker-row">
+      <label>Of which face</label>
+      <div class="face-grid" id="face-grid"></div>
+    </div>
+    <button class="btn-primary" id="submit-bid">Make this claim</button>
+  `;
+
+  const qtyValEl  = container.querySelector("#qty-val");
+  const submitBtn = container.querySelector("#submit-bid");
+
+  function refreshFaceGrid(){
+    const grid = container.querySelector("#face-grid");
+    grid.innerHTML = "";
+    FACES.forEach((f, idx) => {
+      const legal = isLegalRaise(bid, qty, idx);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "face-opt face-" + rankClass(f) + (idx===faceIdx ? " active":"");
+      btn.textContent = f;
+      btn.disabled = !legal;
+      btn.addEventListener("click", () => {
+        if(btn.disabled) return;
+        faceIdx = idx;
+        refreshFaceGrid();
+        refreshSubmit();
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  function ensureFaceLegal(){
+    // If the currently chosen face is no longer a legal raise at this qty, snap to
+    // the first legal face (prefer higher faces at the same qty).
+    if(isLegalRaise(bid, qty, faceIdx)) return;
+    for(let i=0;i<FACES.length;i++){
+      if(isLegalRaise(bid, qty, i)){ faceIdx = i; return; }
+    }
+  }
+
+  function refreshSubmit(){
+    const ok = isLegalRaise(bid, qty, faceIdx);
+    submitBtn.disabled = !ok;
+  }
+
+  function setQty(v){
+    qty = Math.max(minQtyFloor, Math.min(maxQty, v));
+    qtyValEl.textContent = qty;
+    ensureFaceLegal();
+    refreshFaceGrid();
+    refreshSubmit();
+  }
+
+  container.querySelector("#qty-minus").addEventListener("click", () => setQty(qty - 1));
+  container.querySelector("#qty-plus").addEventListener("click",  () => setQty(qty + 1));
+
+  refreshFaceGrid();
+  refreshSubmit();
+
+  submitBtn.addEventListener("click", () => {
+    if(submitBtn.disabled) return;
+    submitBid(qty, FACES[faceIdx]);
+  });
+
+  return container;
+}
+
+// maps a face value to a css class suffix for per-rank coloring
+function rankClass(face){
+  return ({ "9":"r9","10":"r10","J":"rJ","Q":"rQ","K":"rK","A":"rA" })[face] || "r9";
+}
+
+async function submitBid(quantity, face, actingPlayerId){
+  actingPlayerId = actingPlayerId || myPlayerId;
+  const room = lastRoomSnapshot;
+  if(!room) return;
+  const order = room.turnOrder.filter(pid => !room.players[pid].eliminated);
+  const myIdx = order.indexOf(actingPlayerId);
+  const nextIdx = (myIdx + room.direction + order.length) % order.length;
+  const nextPid = order[nextIdx];
+
+  const newBid = { quantity, face, byPlayerId: actingPlayerId };
+
+  await update(ref(db, `rooms/${roomCode}`), {
+    currentBid: newBid,
+    currentTurnPlayerId: nextPid,
+    bidHistory: [...(room.bidHistory||[]), newBid]
+  });
+}
+
+async function submitChallenge(room, actingPlayerId){
+  actingPlayerId = actingPlayerId || myPlayerId;
+  const bid = room.currentBid;
+  if(!bid) return;
+
+  // tally all dice across active players
+  let allDice = [];
+  room.turnOrder.forEach(pid => {
+    const p = room.players[pid];
+    if(p && !p.eliminated && p.dice) allDice = allDice.concat(p.dice.map(f => ({face:f, owner:pid})));
+  });
+
+  const matchCount = allDice.filter(d => d.face === bid.face || d.face === WILD_FACE).length;
+  const claimTrue = matchCount >= bid.quantity;
+
+  const challengerId = actingPlayerId;
+  const bidderId = bid.byPlayerId;
+  // If claim true -> challenger was WRONG -> challenger loses a die, bidder starts next round.
+  // If claim false -> challenger was RIGHT -> bidder loses a die, challenger starts next round.
+  const loserId = claimTrue ? challengerId : bidderId;
+  const winnerId = claimTrue ? bidderId : challengerId;
+
+  const loserOldCount = room.players[loserId].diceCount;
+  const newDiceCount = Math.max(loserOldCount - 1, 0);
+  const eliminated = newDiceCount <= 0;
+
+  // who's still in after this die loss?
+  const remaining = room.turnOrder.filter(pid => {
+    const p = room.players[pid];
+    if(!p) return false;
+    if(pid === loserId) return !eliminated;
+    return !p.eliminated;
+  });
+  const gameOver = remaining.length <= 1;
+
+  // Apply the die loss immediately so the round-over screen shows correct counts,
+  // then enter the "roundover" ready-up phase (or end the game).
+  const updates = {};
+  updates[`players/${loserId}/diceCount`] = newDiceCount;
+  updates[`players/${loserId}/eliminated`] = eliminated;
+  updates["currentBid"] = null;
+  updates["lastReveal"] = {
+    allDice, bid, claimTrue, challengerId, bidderId, loserId, winnerId,
+    loserOldCount, loserNewCount: newDiceCount, eliminated, matchCount,
+    nextStarterId: winnerId, gameOver
+  };
+
+  if(gameOver){
+    updates["phase"] = "ended";
+    updates["winnerPlayerId"] = remaining[0] || winnerId;
+  } else {
+    updates["phase"] = "roundover";
+    updates["readyFor"] = {}; // reset ready map; players tap in
+  }
+
+  await update(ref(db, `rooms/${roomCode}`), updates);
+}
+
+// Called when a player taps READY on the round-over screen.
+async function markReady(pid){
+  pid = pid || myPlayerId;
+  await update(ref(db, `rooms/${roomCode}/readyFor`), { [pid]: true });
+}
+
+// Any client may detect "everyone's ready" and advance the round. A short lock
+// (same idea as the bot lock) prevents two clients advancing simultaneously.
+async function maybeAdvanceRound(room){
+  if(room.phase !== "roundover") return;
+  const reveal = room.lastReveal;
+  if(!reveal) return;
+
+  // active (non-eliminated) players still in the game
+  const active = room.turnOrder.filter(pid => {
+    const p = room.players[pid];
+    return p && !p.eliminated;
+  });
+  // bots are auto-ready; only humans must tap
+  const humans = active.filter(pid => !room.players[pid].isBot);
+  const readyFor = room.readyFor || {};
+  const allReady = humans.every(pid => readyFor[pid]);
+  if(!allReady) return;
+
+  // claim a short lock so only one client performs the advance
+  const lockRef = ref(db, `rooms/${roomCode}/advanceLock`);
+  const lockSnap = await get(lockRef);
+  const lock = lockSnap.exists() ? lockSnap.val() : null;
+  const now = Date.now();
+  if(lock && (now - lock.ts) < 4000) return;
+  await set(lockRef, { ts: now, by: myPlayerId });
+
+  // re-verify we still hold the lock and phase hasn't moved
+  const fresh = (await get(ref(db, `rooms/${roomCode}`))).val();
+  if(!fresh || fresh.phase !== "roundover") { await set(lockRef, null); return; }
+  const fl = (await get(lockRef)).val();
+  if(!fl || fl.by !== myPlayerId) return;
+
+  // build next round: re-roll everyone still in, winner starts, keep direction
+  const updates = {};
+  active.forEach(pid => {
+    updates[`players/${pid}/dice`] = rollDice(fresh.players[pid].diceCount);
+  });
+  updates["currentBid"] = null;
+  updates["bidHistory"] = [];
+  updates["round"] = (fresh.round || 1) + 1;
+  updates["currentTurnPlayerId"] = reveal.nextStarterId;
+  updates["readyFor"] = {};
+  updates["lastReveal"] = null;
+  updates["phase"] = "playing";
+  await update(ref(db, `rooms/${roomCode}`), updates);
+  await set(lockRef, null);
+}
+
+// ===================== BOT ENGINE =====================
+// Any connected client may compute a bot's move when it's that bot's turn.
+// A short "claim lock" (timestamp) prevents every open tab from acting at once;
+// if the claimer's tab dies mid-think, the lock simply expires and another
+// open client picks it up a few seconds later. This is what lets bots keep
+// running even if the host's tab closes, as long as ANY tab is open, and
+// lets the game resume the instant anyone reopens it if all tabs closed.
+const BOT_LOCK_TTL_MS = 4000;
+const BOT_THINK_DELAY_MS = 1100;
+
+async function maybeDriveBotTurn(room){
+  if(room.phase !== "playing") return;
+  const turnPid = room.currentTurnPlayerId;
+  if(!turnPid) return;
+  const turnPlayer = room.players[turnPid];
+  if(!turnPlayer || !turnPlayer.isBot || turnPlayer.eliminated) return;
+
+  const lockRef = ref(db, `rooms/${roomCode}/botLock`);
+  const snap = await get(lockRef);
+  const lock = snap.exists() ? snap.val() : null;
+  const now = Date.now();
+
+  if(lock && lock.pid === turnPid && (now - lock.ts) < BOT_LOCK_TTL_MS){
+    return; // someone else is already handling this bot's turn
+  }
+
+  // claim the lock
+  await set(lockRef, { pid: turnPid, ts: now, claimedBy: myPlayerId });
+
+  setTimeout(async () => {
+    // re-verify we still hold the lock and it's still this bot's turn before acting
+    const freshSnap = await get(ref(db, `rooms/${roomCode}`));
+    if(!freshSnap.exists()) return;
+    const freshRoom = freshSnap.val();
+    if(freshRoom.phase !== "playing") return;
+    if(freshRoom.currentTurnPlayerId !== turnPid) return; // someone already moved
+    const freshLock = (await get(lockRef)).val();
+    if(!freshLock || freshLock.claimedBy !== myPlayerId || freshLock.pid !== turnPid) return;
+
+    await executeBotTurn(freshRoom, turnPid);
+    await set(lockRef, null);
+  }, BOT_THINK_DELAY_MS);
+}
+
+async function executeBotTurn(room, botPid){
+  const bot = room.players[botPid];
+  if(!bot) return;
+  const decision = decideBotMove(room, botPid, bot);
+
+  if(decision.action === "challenge"){
+    await submitChallenge(room, botPid);
+  } else {
+    await submitBid(decision.quantity, decision.face, botPid);
+  }
+}
+
+// Core probability helper: given total dice in play and a face, the expected
+// count is totalDice/3 (each die has a 2/6 chance of matching face-or-wild,
+// except when face itself IS the wild face, which is 1/6).
+function expectedMatches(totalDice, face){
+  const p = (face === WILD_FACE) ? (1/6) : (2/6);
+  return totalDice * p;
+}
+
+function countOwnMatches(bot, face){
+  if(!bot.dice) return 0;
+  return bot.dice.filter(f => f === face || f === WILD_FACE).length;
+}
+
+function decideBotMove(room, botPid, bot){
+  const difficulty = bot.botDifficulty || "average";
+  const bid = room.currentBid;
+  const totalDice = Object.values(room.players).reduce((s,p)=> s + (p.eliminated?0:p.diceCount), 0);
+  const order = room.turnOrder.filter(pid => !room.players[pid].eliminated);
+
+  const legalMoves = enumerateLegalRaises(bid, totalDice);
+
+  if(difficulty === "noob") return decideNoob(bid, legalMoves, bot);
+  if(difficulty === "average") return decideAverage(bid, legalMoves, bot, totalDice);
+  if(difficulty === "serious") return decideSerious(bid, legalMoves, bot, totalDice, room);
+  return decideGodlike(bid, legalMoves, bot, totalDice, room);
+}
+
+function enumerateLegalRaises(bid, totalDice){
+  // Returns a manageable list of candidate {quantity, face} raises, not the full space.
+  const moves = [];
+  if(!bid){
+    FACES.forEach(f => moves.push({quantity:1, face:f}));
+    return moves;
+  }
+  const bidFaceIdx = FACES.indexOf(bid.face);
+  // same quantity, higher face
+  for(let fi = bidFaceIdx+1; fi < FACES.length; fi++){
+    moves.push({quantity: bid.quantity, face: FACES[fi]});
+  }
+  // higher quantity, any face (cap how far above we enumerate to stay sane)
+  const qtyCap = Math.min(bid.quantity + 5, totalDice);
+  for(let q = bid.quantity+1; q <= qtyCap; q++){
+    FACES.forEach(f => moves.push({quantity:q, face:f}));
+  }
+  return moves;
+}
+
+function decideNoob(bid, legalMoves, bot){
+  // Bids almost randomly. Rarely challenges (only 10% of the time when a bid exists).
+  if(bid && Math.random() < 0.10){
+    return { action:"challenge" };
+  }
+  const pick = legalMoves[Math.floor(Math.random()*legalMoves.length)];
+  return { action:"bid", quantity:pick.quantity, face:pick.face };
+}
+
+function decideAverage(bid, legalMoves, bot, totalDice){
+  // Challenges when the current claim's expected count is clearly below what's claimed.
+  if(bid){
+    const expected = expectedMatches(totalDice, bid.face);
+    const ownMatches = countOwnMatches(bot, bid.face);
+    const remainingExpected = expectedMatches(totalDice - bot.dice.length, bid.face);
+    const plausibleCount = ownMatches + remainingExpected;
+    if(bid.quantity > plausibleCount * 1.35){
+      return { action:"challenge" };
+    }
+  }
+  // Otherwise bid based on its own hand: prefer faces it actually holds, lowest legal raise.
+  const ranked = legalMoves
+    .map(m => ({...m, score: countOwnMatches(bot, m.face) - (m.quantity * 0.15)}))
+    .sort((a,b) => b.score - a.score);
+  const choice = ranked[0];
+  return { action:"bid", quantity:choice.quantity, face:choice.face };
+}
+
+function decideSerious(bid, legalMoves, bot, totalDice, room){
+  if(bid){
+    const expected = expectedMatches(totalDice, bid.face);
+    const ownMatches = countOwnMatches(bot, bid.face);
+    const remainingExpected = expectedMatches(totalDice - bot.dice.length, bid.face);
+    const plausibleCount = ownMatches + remainingExpected;
+    // tighter threshold than average, and factors in bid history length (long bid chains => more pressure to challenge)
+    const chainPressure = Math.min((room.bidHistory||[]).length * 0.02, 0.15);
+    if(bid.quantity > plausibleCount * (1.22 - chainPressure)){
+      return { action:"challenge" };
+    }
+  }
+  // Deliberate occasional bluff: sometimes bid a face it holds none of, if quantity is still plausible table-wide.
+  const bluff = Math.random() < 0.18;
+  const ranked = legalMoves
+    .map(m => {
+      const own = countOwnMatches(bot, m.face);
+      const tableExpected = expectedMatches(totalDice, m.face);
+      const safety = (own + tableExpected*0.6) - m.quantity;
+      return {...m, score: bluff ? (Math.random()*2 - m.quantity*0.1) : safety};
+    })
+    .sort((a,b) => b.score - a.score);
+  const choice = ranked[0];
+  return { action:"bid", quantity:choice.quantity, face:choice.face };
+}
+
+function decideGodlike(bid, legalMoves, bot, totalDice, room){
+  if(bid){
+    const ownMatches = countOwnMatches(bot, bid.face);
+    const unknownDice = totalDice - bot.dice.length;
+    const p = (bid.face === WILD_FACE) ? (1/6) : (2/6);
+    // Binomial expectation + variance-aware threshold: challenge the moment claim
+    // exceeds a tight statistical ceiling (near-optimal play, low tolerance for slack).
+    const expectedUnknown = unknownDice * p;
+    const stdDev = Math.sqrt(unknownDice * p * (1-p));
+    const ceiling = ownMatches + expectedUnknown + stdDev * 0.8;
+    if(bid.quantity > ceiling){
+      return { action:"challenge" };
+    }
+  }
+  // Near-optimal bid: pick the raise with the best true probability of being safe,
+  // with a very small, hard-to-read bluff rate.
+  const bluff = Math.random() < 0.08;
+  const ranked = legalMoves
+    .map(m => {
+      const own = countOwnMatches(bot, m.face);
+      const unknownDice = totalDice - bot.dice.length;
+      const p = (m.face === WILD_FACE) ? (1/6) : (2/6);
+      const expectedUnknown = unknownDice * p;
+      const margin = (own + expectedUnknown) - m.quantity;
+      return {...m, score: bluff ? Math.random() : margin};
+    })
+    .sort((a,b) => b.score - a.score);
+  const choice = ranked[0];
+  return { action:"bid", quantity:choice.quantity, face:choice.face };
+}
+
+// ===================== ROUND-OVER (ready-up) =====================
+function renderRoundOver(room){
+  const overlay = document.getElementById("overlay-reveal");
+  const reveal = room.lastReveal;
+  if(!reveal){ overlay.classList.add("hidden"); return; }
+  overlay.classList.remove("hidden");
+
+  const bidderName     = room.players[reveal.bidderId]?.name || "?";
+  const challengerName = room.players[reveal.challengerId]?.name || "?";
+  const loserName      = room.players[reveal.loserId]?.name || "?";
+
+  document.getElementById("reveal-claim-label").textContent =
+    `${challengerName} called liar on ${bidderName}'s ${reveal.bid.quantity} \u00d7 ${reveal.bid.face}`;
+
+  const verdictEl = document.getElementById("reveal-verdict");
+  verdictEl.textContent = reveal.claimTrue ? "The claim was TRUE" : "The claim was a LIE";
+  verdictEl.className = "verdict " + (reveal.claimTrue ? "true":"false");
+
+  // revealed dice
+  const grid = document.getElementById("reveal-grid");
+  grid.innerHTML = "";
+  reveal.allDice.forEach(d => {
+    const match = d.face === reveal.bid.face || d.face === WILD_FACE;
+    const die = document.createElement("div");
+    die.className = "mini-die " + rankClass(d.face) + (match ? " match":"");
+    die.textContent = d.face;
+    grid.appendChild(die);
+  });
+
+  document.getElementById("reveal-count").textContent =
+    `${reveal.matchCount} matched ${reveal.bid.face === WILD_FACE ? "Aces" : reveal.bid.face + " or Aces"} — needed ${reveal.bid.quantity}`;
+
+  // consequence line
+  const consequence = document.getElementById("reveal-consequence");
+  consequence.innerHTML = reveal.eliminated
+    ? `<b>${escapeHtml(loserName)}</b> loses their last die and is out.`
+    : `<b>${escapeHtml(loserName)}</b> loses a die — down to ${reveal.loserNewCount}.`;
+
+  // per-player dice counts after this round
+  const countsEl = document.getElementById("reveal-counts");
+  countsEl.innerHTML = "";
+  room.turnOrder.forEach(pid => {
+    const p = room.players[pid];
+    if(!p) return;
+    const row = document.createElement("div");
+    row.className = "count-row" + (p.eliminated ? " out" : "");
+    const ready = (room.readyFor||{})[pid];
+    const isHuman = !p.isBot;
+    const tick = p.eliminated ? "—" : (isHuman ? (ready ? "ready" : "…") : "bot");
+    row.innerHTML = `<span class="count-name">${escapeHtml(p.name)}${pid===myPlayerId?" (you)":""}</span>
+                     <span class="count-dice">${p.eliminated ? "out" : p.diceCount + (p.diceCount===1?" die":" dice")}</span>
+                     <span class="count-ready ${ready?'is-ready':''}">${tick}</span>`;
+    countsEl.appendChild(row);
+  });
+
+  // READY button / waiting state
+  const me = room.players[myPlayerId];
+  const actionEl = document.getElementById("reveal-action");
+  const readyFor = room.readyFor || {};
+  const active = room.turnOrder.filter(pid => room.players[pid] && !room.players[pid].eliminated);
+  const humans = active.filter(pid => !room.players[pid].isBot);
+  const waitingOn = humans.filter(pid => !readyFor[pid]).length;
+
+  if(!me || me.eliminated){
+    actionEl.innerHTML = `<div class="waiting-banner">You're out — waiting for the table to continue.</div>`;
+  } else if(readyFor[myPlayerId]){
+    actionEl.innerHTML = `<div class="waiting-banner">Ready. Waiting on <b>${waitingOn}</b> more&hellip;</div>`;
+  } else {
+    actionEl.innerHTML = `<button class="btn-primary" id="btn-ready">I'm ready — next round</button>`;
+    document.getElementById("btn-ready").addEventListener("click", () => {
+      markReady(myPlayerId);
+    });
+  }
+}
+
+// ===================== ENDGAME =====================
+// TOKEN-HOOK: this entire function only ever DISPLAYS who owes what — it never
+// moves, deducts, or records value anywhere. Bots are intentionally excluded from
+// owing/collecting (a bot can't pay real money). A real token system would likely:
+//   1. Replace this render-only math with an actual settlement call (deduct from
+//      payer balances, credit the winner) — probably a Firebase transaction so two
+//      clients can't double-settle the same game.
+//   2. Decide what happens if a payer's token balance is insufficient (debt? blocked?).
+//   3. Decide whether settlement happens automatically when phase becomes "ended",
+//      or requires explicit confirmation from each payer (safer, since this is real value).
+//   4. Add a persisted transaction log (who paid whom, how much, when) instead of a
+//      one-time UI render that disappears once the player leaves this screen.
+// ===================== ENDGAME + SETTLEMENT =====================
+// At game end we move real account chips from each human loser to the winner.
+// Exactly one client performs settlement, guarded by room.settled (a transaction
+// flips it false->true). Bots never owe or collect. Each settlement also bumps
+// every human's gamesCompleted (which can trigger their referrer's reward).
+async function renderEndScreen(room){
+  const winner = room.players[room.winnerPlayerId];
+  document.getElementById("end-winner-name").textContent = winner ? `${winner.name} wins` : "Game over";
+  document.getElementById("end-subtext").textContent = winner && winner.diceCount > 0
+    ? `Last cup standing with ${winner.diceCount} ${winner.diceCount===1?"die":"dice"} left.`
+    : "Last player standing.";
+
+  const payoutCard = document.getElementById("payout-card");
+
+  // perform settlement once (any client may, but only the first wins the flag)
+  if(room.stakesEnabled && !room.settled){
+    await settleGame(room);
+  }
+
+  if(!room.stakesEnabled || !winner){
+    payoutCard.classList.add("hidden");
+    return;
+  }
+
+  const perDie = room.stakePerDie || 0;
+  const owedEach = (winner.diceCount||0) * perDie;
+  const payers = Object.entries(room.players)
+    .filter(([pid, p]) => pid !== room.winnerPlayerId && !p.isBot && p.uid);
+
+  if(winner.isBot || payers.length === 0 || owedEach <= 0){
+    payoutCard.classList.add("hidden");
+    return;
+  }
+
+  payoutCard.classList.remove("hidden");
+  const listEl = document.getElementById("payout-list");
+  listEl.innerHTML = "";
+  payers.forEach(([pid, p], i) => {
+    const row = document.createElement("div");
+    row.className = "payout-row animate";
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.animationDelay = (i*0.12) + "s";
+    row.innerHTML = `<span>${escapeHtml(p.name)} → ${escapeHtml(winner.name)}</span>
+                      <span style="font-family:var(--mono); color:var(--brass);">${formatStake(owedEach)} chips</span>`;
+    listEl.appendChild(row);
+  });
+  document.getElementById("payout-total").textContent = `${formatStake(owedEach * payers.length)} chips`;
+
+  // celebratory money fly-in toward the total
+  flyMoney(payers.length);
+
+  renderSessionScoreboard(room, winner, owedEach, payers);
+}
+
+// Moves chips: each human payer loses owedEach, winner gains the sum.
+// Guarded so it runs once across all clients.
+async function settleGame(room){
+  // claim the settlement with a transaction on room.settled
+  const flagRef = ref(db, `rooms/${roomCode}/settled`);
+  const res = await runTransaction(flagRef, (cur) => {
+    if(cur) return; // already settled -> abort
+    return true;
+  });
+  if(!res.committed || res.snapshot.val() !== true) return;
+  // double-check we were the one who flipped it from false (transaction returns
+  // committed=true even if it aborted via undefined; guard with a re-read)
+
+  const winner = room.players[room.winnerPlayerId];
+  const perDie = room.stakePerDie || 0;
+  const owedEach = (winner.diceCount||0) * perDie;
+  if(!winner || winner.isBot || owedEach <= 0) return;
+
+  const payers = Object.entries(room.players)
+    .filter(([pid, p]) => pid !== room.winnerPlayerId && !p.isBot && p.uid);
+  let collected = 0;
+
+  for(const [pid, p] of payers){
+    // deduct from payer (never below 0)
+    await runTransaction(ref(db, `users/${p.uid}/balance`), (b) => {
+      const cur = b||0;
+      return Math.max(0, cur - owedEach);
+    });
+    collected += owedEach;
+    // count a completed game for this payer (referral trigger)
+    await bumpGamesCompleted(p.uid);
+  }
+  // credit the winner
+  if(winner.uid){
+    await runTransaction(ref(db, `users/${winner.uid}/balance`), (b) => (b||0) + collected);
+    await bumpGamesCompleted(winner.uid);
+  }
+}
+
+// Increments a user's completed-games counter and, if they were referred and
+// this is their first completed game, credits the referrer (with tiered rewards).
+async function bumpGamesCompleted(uid){
+  const uref = ref(db, `users/${uid}`);
+  const snap = await get(uref);
+  if(!snap.exists()) return;
+  const u = snap.val();
+  const newCount = (u.gamesCompleted||0) + 1;
+  await update(uref, { gamesCompleted: newCount });
+
+  // first completed game -> credit referrer once
+  if(newCount === 1 && u.referredBy && !u.referralCredited){
+    await update(uref, { referralCredited: true });
+    const refUid = u.referredBy;
+    const refSnap = await get(ref(db, `users/${refUid}`));
+    if(refSnap.exists()){
+      const r = refSnap.val();
+      const newRefCount = (r.referralCount||0) + 1;
+      await update(ref(db, `users/${refUid}`), { referralCount: newRefCount });
+      // tiered reward when crossing a threshold — paid FROM THE BANK
+      const tier = REFERRAL_TIERS.find(t => t.count === newRefCount);
+      if(tier){ await payFromHotWallet(refUid, tier.reward, "referral"); }
+    }
+  }
+}
+
+// session scoreboard: tracks net chips won/lost this browser session
+function renderSessionScoreboard(room, winner, owedEach, payers){
+  // update local ledger
+  if(winner.handle) sessionLedger[winner.handle] = (sessionLedger[winner.handle]||0) + owedEach*payers.length;
+  payers.forEach(([pid,p]) => {
+    if(p.handle) sessionLedger[p.handle] = (sessionLedger[p.handle]||0) - owedEach;
+  });
+  const board = document.getElementById("session-board");
+  if(!board) return;
+  const entries = Object.entries(sessionLedger).sort((a,b)=>b[1]-a[1]);
+  if(entries.length === 0){ board.classList.add("hidden"); return; }
+  board.classList.remove("hidden");
+  board.innerHTML = `<p class="eyebrow" style="margin-bottom:10px;">This session</p>` +
+    entries.map(([h,net]) => `
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;">
+        <span>@${escapeHtml(h)}</span>
+        <span style="font-family:var(--mono);color:${net>=0?'var(--sage)':'var(--clay)'};">${net>=0?'+':''}${formatStake(net)}</span>
+      </div>`).join("");
+}
+
+// flings coin glyphs toward the payout total for a celebratory beat
+function flyMoney(count){
+  const target = document.getElementById("payout-total");
+  if(!target) return;
+  const tr = target.getBoundingClientRect();
+  for(let i=0;i<Math.min(count*3,18);i++){
+    const c = document.createElement("div");
+    c.className = "money-fly"; c.textContent = "●";
+    c.style.left = (Math.random()*window.innerWidth) + "px";
+    c.style.top  = (window.innerHeight*0.3 + Math.random()*120) + "px";
+    document.body.appendChild(c);
+    const dx = tr.left + tr.width/2 - parseFloat(c.style.left);
+    const dy = tr.top - parseFloat(c.style.top);
+    c.animate([
+      { transform:"translate(0,0) scale(1)", opacity:1 },
+      { transform:`translate(${dx}px,${dy}px) scale(0.4)`, opacity:0 }
+    ], { duration: 700 + Math.random()*400, delay: i*40, easing:"cubic-bezier(.4,.1,.3,1)", fill:"forwards" });
+    setTimeout(()=>c.remove(), 1400 + i*40);
+  }
+}
+
+document.getElementById("btn-play-again").addEventListener("click", () => {
+  if(unsubRoom) unsubRoom();
+  roomCode = null;
+  showScreen("landing");
+});
+
+function formatStake(n){
+  return Number(n||0).toLocaleString("en-US");
+}
+
+function escapeHtml(str){
+  const d = document.createElement("div");
+  d.textContent = str || "";
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
